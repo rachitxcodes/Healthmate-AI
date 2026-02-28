@@ -12,7 +12,7 @@ import MedicineScheduler from "./pages/MedicineScheduler";
 import SymptomDecoder from "./pages/SymptomDecoder";
 import AiCompanion from "./pages/AiCompanion";
 import ProfileSettings from "./pages/ProfileSettings";
-
+import ReportResult from "./pages/ReportResult";
 import ProtectedRoute from "./utils/ProtectedRoute";
 
 export default function App() {
@@ -100,6 +100,30 @@ export default function App() {
           }
         />
 
+        <Route
+          path="/risk-predictor"
+          element={
+            <ProtectedRoute>
+              <>
+                <NavbarPrivate />
+                <RiskPredictor />
+              </>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/report-result"
+          element={
+            <ProtectedRoute>
+              <>
+                <NavbarPrivate />
+                <ReportResult />
+              </>
+            </ProtectedRoute>
+          }
+        />
+        
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

@@ -1,5 +1,5 @@
-import { useLocation, Link } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Navbar from "../components/Navbar";
 import { supabase } from "../supabaseClient";
@@ -22,30 +22,12 @@ interface ApiResult {
   predictions?: Record<string, Prediction>;
 }
 
-interface LocationState {
-  data: ApiResult;
-}
-
 export default function ReportResult() {
-  const location = useLocation();
+  // ✅ SINGLE SOURCE OF TRUTH
+  const stored = sessionStorage.getItem("healthmate_report_result");
+  const resultData: ApiResult | null = stored ? JSON.parse(stored) : null;
 
-  /* -------------------- SAFE DATA RESOLUTION -------------------- */
-  const locationData = (location.state as LocationState | null)?.data ?? null;
-
-  const [resultData, setResultData] = useState<ApiResult | null>(() => {
-    if (locationData) {
-      sessionStorage.setItem(
-        "healthmate_report_result",
-        JSON.stringify(locationData)
-      );
-      return locationData;
-    }
-
-    const stored = sessionStorage.getItem("healthmate_report_result");
-    return stored ? JSON.parse(stored) : null;
-  });
-
-  /* -------------------- HOOKS (ALWAYS RUN) -------------------- */
+  /* -------------------- HOOKS -------------------- */
   const [editableData, setEditableData] = useState<Record<string, any>>(
     resultData?.extracted_data ?? {}
   );
@@ -55,7 +37,7 @@ export default function ReportResult() {
     null
   );
 
-  /* -------------------- GUARD (AFTER HOOKS) -------------------- */
+  /* -------------------- GUARD -------------------- */
   if (!resultData) {
     return (
       <div className="min-h-screen bg-[#0A1324] text-white text-center">
@@ -109,7 +91,7 @@ export default function ReportResult() {
       setLoadingRisk(false);
     }
   };
-
+  
   /* -------------------- UI -------------------- */
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0A1324] via-[#0B1B33] to-[#0A1324] text-white">

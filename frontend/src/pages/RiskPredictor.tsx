@@ -1,24 +1,24 @@
-// full page changed without changing UI successfully
+// full page changed WITHOUT changing UI
 import { useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Navbar from "../components/Navbar";
 import { supabase } from "../supabaseClient";
-import { useNavigate } from "react-router-dom"; // ✅ Added navigation
+import { useNavigate } from "react-router-dom";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 export default function UploadReport() {
   const inputRef = useRef<HTMLInputElement>(null);
-  const navigate = useNavigate(); // ✅ Initialize navigate hook
+  const navigate = useNavigate();
 
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [successMsg, setSuccessMsg] = useState<string>("");
-  const [errorMsg, setErrorMsg] = useState<string>("");
+  const [successMsg, setSuccessMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
 
   // ---------- helpers ----------
   const openFileDialog = () => inputRef.current?.click();
@@ -29,44 +29,41 @@ export default function UploadReport() {
 
   const acceptMime = "image/*";
 
-  const handleFilePick = (f: File | undefined | null) => {
+  const handleFilePick = (f: File | null | undefined) => {
     if (!f) return;
     resetMessages();
     setFile(f);
     if (f.type.startsWith("image/")) {
-      const url = URL.createObjectURL(f);
-      setPreview(url);
+      setPreview(URL.createObjectURL(f));
     } else {
       setPreview(null);
     }
   };
 
-  // ---------- input/drag events ----------
-  const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    handleFilePick(e.target.files?.[0] ?? null);
-  };
+  // ---------- input / drag ----------
+  const onChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    handleFilePick(e.target.files?.[0]);
+
   const onDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    e.stopPropagation();
     setDragActive(true);
   };
+
   const onDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
-    e.stopPropagation();
     setDragActive(false);
-  };
-  const onDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFilePick(e.dataTransfer.files[0]);
-    }
   };
 
-  // ---------- upload with backend fetch ----------
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragActive(false);
+    handleFilePick(e.dataTransfer.files?.[0]);
+  };
+
+  // ---------- upload ----------
   const handleUpload = async () => {
     resetMessages();
+
     if (!file) {
       setErrorMsg("Please select an image first.");
       return;
@@ -77,56 +74,53 @@ export default function UploadReport() {
 
     try {
       const {
-      data: { session },
-      error: sessionError,
+        data: { session },
+        error,
       } = await supabase.auth.getSession();
 
-    console.log("Checking session before upload:", session);
+      if (error) throw error;
+      if (!session) throw new Error("Not logged in");
 
-    if (sessionError) throw new Error(sessionError.message);
-    if (!session) throw new Error("You are not logged in.");
+      const formData = new FormData();
+      formData.append("file", file);
 
-    const formData = new FormData();
-    formData.append("file", file);
+      const response = await fetch(`${API_BASE_URL}/upload-image/`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: formData,
+      });
 
-    const response = await fetch(`${API_BASE_URL}/upload-image/`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: formData,
-    });
+      const result = await response.json();
 
-    const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.detail || "Upload failed");
+      }
 
-    if (!response.ok) {
-      throw new Error(result.detail || "Upload failed");
+      // ✅ SINGLE SOURCE OF TRUTH
+      sessionStorage.setItem(
+        "healthmate_report_result",
+        JSON.stringify(result)
+      );
+
+      setProgress(100);
+      setSuccessMsg("Uploaded successfully");
+
+      // ✅ CLEAN NAVIGATION (NO STATE)
+      navigate("/report-result");
+
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err?.message || "Something went wrong");
+    } finally {
+      setIsUploading(false);
+      setTimeout(() => setProgress(0), 800);
     }
-
-    // ✅ Persist result (IMPORTANT)
-    sessionStorage.setItem(
-      "healthmate_report_result",
-      JSON.stringify(result)
-    );
-
-    setProgress(100);
-    setSuccessMsg("Uploaded successfully");
-
-    console.log("Navigating to report-result");
-
-    // ✅ Navigate WITHOUT relying on router state
-    navigate("/report-result", { state: { data: result } });
-
-  } catch (err: any) {
-    console.error("Upload error:", err);
-    setErrorMsg(err?.message || "Something went wrong");
-  } finally {
-    setIsUploading(false);
-    setTimeout(() => setProgress(0), 900);
-  }
   };
 
   return (
+    
     <div className="min-h-screen bg-gradient-to-b from-[#0A1324] via-[#0B1B33] to-[#0A1324] text-white">
       <Navbar />
 
