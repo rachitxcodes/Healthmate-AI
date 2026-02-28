@@ -1,24 +1,66 @@
-# === Python ===
+# ==============================
+# 🐍 Python
+# ==============================
+
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.venv/
-env/
+*.py[cod]
+*$py.class
 *.pkl
 
-# === Node / React ===
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs
+*.log
+
+# Test / coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# ==============================
+# ⚛️ Node / React
+# ==============================
+
 node_modules/
 dist/
 build/
 .cache/
+coverage/
+*.tsbuildinfo
 
-# === Environment ===
+# Vite specific
+vite.svg
+
+# ==============================
+# 🔐 Environment Variables
+# ==============================
+
 .env
+.env.*
+!.env.example
 
-# === OS / Editor ===
+# ==============================
+# 🖥 OS / Editor
+# ==============================
+
 .DS_Store
+Thumbs.db
 .vscode/
+.idea/
 
-# === Data (optional – recommend ignoring) ===
+# ==============================
+# 📊 Data Files (optional)
+# ==============================
+
 *.csv
+*.sqlite3
+*.db
