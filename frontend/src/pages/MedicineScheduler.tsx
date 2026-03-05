@@ -1,11 +1,7 @@
-import React, { useState } from "react";
-import NavbarPrivate from "../components/NavbarPrivate";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Plus, Trash2, Flame } from "lucide-react";
 
-/**
- * Type definitions
- */
 type Frequency = "daily" | "alternate" | "every_x_hours";
 
 interface Schedule {
@@ -20,277 +16,154 @@ interface Schedule {
 }
 
 export default function MedicineScheduler() {
-
-  // form state
-  const [medicineName, setMedicineName] = useState<string>("");
-  const [dosage, setDosage] = useState<string>("");
-  const [dosesPerDay, setDosesPerDay] = useState<string>("1");
-  const [times, setTimes] = useState<string[]>([""]);
-  const [startDate, setStartDate] = useState<string>("");
-  const [endDate, setEndDate] = useState<string>("");
+  const [medicineName, setMedicineName] = useState("");
+  const [dosage, setDosage] = useState("");
+  const [dosesPerDay, setDosesPerDay] = useState("1");
+  const [times, setTimes] = useState([""]);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [frequency, setFrequency] = useState<Frequency>("daily");
-  const [everyHours, setEveryHours] = useState<string>("");
-
-  // saved schedule (typed)
+  const [everyHours, setEveryHours] = useState("");
   const [savedSchedule, setSavedSchedule] = useState<Schedule | null>(null);
+  const [streak] = useState(3);
 
-  // demo streak (you can replace with real logic later)
-  const [streak] = useState<number>(3);
-
-  // handlers
   const handleTimeChange = (value: string, index: number) => {
-    setTimes((prev) => {
-      const copy = [...prev];
-      copy[index] = value;
-      return copy;
-    });
+    setTimes((prev) => { const c = [...prev]; c[index] = value; return c; });
   };
 
-  const handleAddTime = () => setTimes((prev) => [...prev, ""]);
-  const handleRemoveTime = (index: number) =>
-    setTimes((prev) => prev.filter((_, i) => i !== index));
-
   const handleSubmit = () => {
-    // basic validation (optional - add more as needed)
-    if (!medicineName.trim()) {
-      alert("Please enter a medicine name.");
-      return;
-    }
-    if (!dosage.trim()) {
-      alert("Please enter dosage.");
-      return;
-    }
-    if (times.length === 0 || times.some((t) => t.trim() === "")) {
-      alert("Please add at least one valid reminder time.");
-      return;
-    }
+    if (!medicineName.trim()) return alert("Please enter a medicine name.");
+    if (!dosage.trim()) return alert("Please enter dosage.");
+    if (times.some((t) => !t.trim())) return alert("Please fill all reminder times.");
 
     const schedule: Schedule = {
       medicineName: medicineName.trim(),
       dosage: dosage.trim(),
-      dosesPerDay,
-      times: times.map((t) => t.trim()),
-      startDate,
-      endDate,
-      frequency,
+      dosesPerDay, times, startDate, endDate, frequency,
       everyHours: frequency === "every_x_hours" ? everyHours : undefined,
     };
-
     setSavedSchedule(schedule);
-    // replace with real persist logic later (API / local storage)
-    // e.g., save to Supabase or localStorage
-    alert("Medicine schedule saved successfully!");
+    alert("Medicine schedule saved!");
   };
 
+  // Shared input class
+  const inputClass = "mt-2 w-full px-4 py-3 rounded-xl bg-white/[0.05] border border-white/10 text-white placeholder-white/30 outline-none focus:border-cyan-400/50 transition";
+  const labelClass = "text-sm font-medium text-white/60";
+
   return (
-    <div className="min-h-screen bg-background-light dark:bg-background-dark transition px-6">
-      <NavbarPrivate />
+    <div className="min-h-screen bg-gradient-to-b from-[#0A1324] via-[#0B1B33] to-[#0A1324] text-white px-6 pt-28 pb-20">
+      <div className="max-w-3xl mx-auto">
 
-      <div className="max-w-3xl mx-auto pt-32 pb-20">
-        {/* HEADER + STREAK */}
-        <div className="flex items-center justify-between mb-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-semibold text-text-light dark:text-text-dark">
-              Medicine Scheduler
-            </h1>
-            <p className="text-muted-light dark:text-muted-dark mt-1">
-              Track your medicine timings and stay consistent.
-            </p>
+            <h1 className="text-3xl font-semibold">Medicine Scheduler</h1>
+            <p className="text-white/50 mt-1">Track your medicine timings and stay consistent.</p>
           </div>
-
           <motion.div
-            initial={{ scale: 0.9 }}
-            animate={{ scale: 1 }}
-            className="flex items-center gap-2 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-4 py-2 rounded-xl shadow-sm"
+            initial={{ scale: 0.9 }} animate={{ scale: 1 }}
+            className="flex items-center gap-2 bg-amber-400/10 text-amber-300 border border-amber-400/20 px-4 py-2 rounded-xl"
           >
-            <Flame size={20} />
-            <span className="font-semibold">{streak} day streak</span>
+            <Flame size={18} />
+            <span className="font-semibold text-sm">{streak} day streak</span>
           </motion.div>
         </div>
 
-        {/* FORM CARD */}
+        {/* Form */}
         <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-card-light dark:bg-card-dark rounded-2xl border border-border-light dark:border-border-dark p-6 shadow-sm space-y-6"
+          initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
+          className="rounded-3xl border border-white/10 bg-white/[0.035] backdrop-blur-xl p-6 sm:p-8 space-y-6"
         >
-          {/* MEDICINE NAME */}
+          {/* Medicine Name */}
           <div>
-            <label className="text-sm font-medium text-muted-light dark:text-muted-dark">
-              Medicine Name
-            </label>
-            <input
-              type="text"
-              value={medicineName}
-              onChange={(e) => setMedicineName(e.target.value)}
-              placeholder="e.g., Dolo 650"
-              className="mt-2 w-full px-4 py-3 rounded-xl bg-background-light dark:bg-background-dark border border-border-light dark:border-border-dark outline-none"
-            />
+            <label className={labelClass}>Medicine Name</label>
+            <input type="text" value={medicineName} onChange={(e) => setMedicineName(e.target.value)}
+              placeholder="e.g., Dolo 650" className={inputClass} />
           </div>
 
-          {/* DOSAGE */}
+          {/* Dosage */}
           <div>
-            <label className="text-sm font-medium text-muted-light dark:text-muted-dark">
-              Dosage
-            </label>
-            <input
-              type="text"
-              value={dosage}
-              onChange={(e) => setDosage(e.target.value)}
-              placeholder="e.g., 1 tablet"
-              className="mt-2 w-full px-4 py-3 rounded-xl bg-background-light dark:bg-background-dark border border-border-light dark:border-border-dark outline-none"
-            />
+            <label className={labelClass}>Dosage</label>
+            <input type="text" value={dosage} onChange={(e) => setDosage(e.target.value)}
+              placeholder="e.g., 1 tablet" className={inputClass} />
           </div>
 
-          {/* DOSES PER DAY */}
+          {/* Doses per day */}
           <div>
-            <label className="text-sm font-medium text-muted-light dark:text-muted-dark">
-              Number of Doses per Day
-            </label>
-
-            <select
-              value={dosesPerDay}
-              onChange={(e) => setDosesPerDay(e.target.value)}
-              className="mt-2 w-full px-4 py-3 rounded-xl bg-background-light dark:bg-background-dark border border-border-light dark:border-border-dark outline-none"
-            >
-              <option value="1">1 dose</option>
-              <option value="2">2 doses</option>
-              <option value="3">3 doses</option>
-              <option value="4">4 doses</option>
-              <option value="5">5 doses</option>
+            <label className={labelClass}>Number of Doses per Day</label>
+            <select value={dosesPerDay} onChange={(e) => setDosesPerDay(e.target.value)}
+              className={inputClass + " cursor-pointer"}>
+              {["1","2","3","4","5"].map(n => <option key={n} value={n} className="bg-[#0B1B33]">{n} dose{n !== "1" ? "s" : ""}</option>)}
             </select>
           </div>
 
-          {/* REMINDER TIMES */}
+          {/* Reminder Times */}
           <div>
-            <label className="text-sm font-medium text-muted-light dark:text-muted-dark">
-              Reminder Times
-            </label>
-
+            <label className={labelClass}>Reminder Times</label>
             {times.map((time, index) => (
               <div key={index} className="flex items-center gap-3 mt-3">
-                <input
-                  type="time"
-                  value={time}
-                  onChange={(e) => handleTimeChange(e.target.value, index)}
-                  className="flex-1 px-4 py-3 rounded-xl bg-background-light dark:bg-background-dark border border-border-light dark:border-border-dark outline-none"
-                />
-
+                <input type="time" value={time} onChange={(e) => handleTimeChange(e.target.value, index)}
+                  className="flex-1 px-4 py-3 rounded-xl bg-white/[0.05] border border-white/10 text-white outline-none focus:border-cyan-400/50 transition" />
                 {index > 0 && (
-                  <button
-                    onClick={() => handleRemoveTime(index)}
-                    className="p-2 bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-300 rounded-xl"
-                    aria-label={`Remove time ${index}`}
-                  >
-                    <Trash2 size={18} />
+                  <button onClick={() => setTimes(prev => prev.filter((_, i) => i !== index))}
+                    className="p-2 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-xl hover:bg-rose-500/20 transition">
+                    <Trash2 size={16} />
                   </button>
                 )}
               </div>
             ))}
-
-            <button
-              onClick={handleAddTime}
-              className="mt-4 flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-xl shadow-sm"
-            >
-              <Plus size={18} />
-              Add Time
+            <button onClick={() => setTimes(prev => [...prev, ""])}
+              className="mt-4 flex items-center gap-2 bg-white/[0.06] border border-white/10 text-white/70 hover:text-white px-4 py-2 rounded-xl transition text-sm">
+              <Plus size={16} /> Add Time
             </button>
           </div>
 
-          {/* START & END DATES */}
+          {/* Start & End Dates */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div>
-              <label className="text-sm font-medium">Start Date</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="mt-2 w-full px-4 py-3 rounded-xl bg-background-light dark:bg-background-dark border border-border-light dark:border-border-dark"
-              />
+              <label className={labelClass}>Start Date</label>
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputClass} />
             </div>
-
             <div>
-              <label className="text-sm font-medium">End Date</label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="mt-2 w-full px-4 py-3 rounded-xl bg-background-light dark:bg-background-dark border border-border-light dark:border-border-dark"
-              />
+              <label className={labelClass}>End Date</label>
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inputClass} />
             </div>
           </div>
 
-          {/* FREQUENCY */}
+          {/* Frequency */}
           <div>
-            <label className="text-sm font-medium">Frequency</label>
-
-            <select
-              value={frequency}
-              onChange={(e) => setFrequency(e.target.value as Frequency)}
-              className="mt-2 w-full px-4 py-3 rounded-xl bg-background-light dark:bg-background-dark border border-border-light dark:border-border-dark outline-none"
-            >
-              <option value="daily">Daily</option>
-              <option value="alternate">Alternate Days</option>
-              <option value="every_x_hours">Every X Hours</option>
+            <label className={labelClass}>Frequency</label>
+            <select value={frequency} onChange={(e) => setFrequency(e.target.value as Frequency)}
+              className={inputClass + " cursor-pointer"}>
+              <option value="daily" className="bg-[#0B1B33]">Daily</option>
+              <option value="alternate" className="bg-[#0B1B33]">Alternate Days</option>
+              <option value="every_x_hours" className="bg-[#0B1B33]">Every X Hours</option>
             </select>
-
             {frequency === "every_x_hours" && (
-              <input
-                type="number"
-                value={everyHours}
-                onChange={(e) => setEveryHours(e.target.value)}
-                placeholder="Every how many hours?"
-                className="mt-3 w-full px-4 py-3 rounded-xl bg-background-light dark:bg-background-dark border border-border-light dark:border-border-dark outline-none"
-              />
+              <input type="number" value={everyHours} onChange={(e) => setEveryHours(e.target.value)}
+                placeholder="Every how many hours?" className={inputClass + " mt-3"} />
             )}
           </div>
 
-          {/* SUBMIT */}
-          <button
-            onClick={handleSubmit}
-            className="w-full py-3 rounded-xl bg-primary-600 text-white font-semibold hover:bg-primary-700 transition shadow-sm"
-          >
+          {/* Submit */}
+          <button onClick={handleSubmit}
+            className="w-full py-4 rounded-2xl bg-cyan-400 text-slate-900 font-bold text-lg hover:bg-cyan-300 transition">
             Save Schedule
           </button>
         </motion.div>
 
-        {/* SAVED SCHEDULE */}
+        {/* Saved Schedule */}
         {savedSchedule && (
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-10 p-6 rounded-2xl border border-primary-300/40 dark:border-primary-700/40 bg-primary-50 dark:bg-primary-900/20 shadow-sm"
-          >
-            <h2 className="text-xl font-semibold text-primary-700 dark:text-primary-300">
-              📅 Your Medicine Schedule is Set!
-            </h2>
-
-            <p className="mt-2 text-text-light dark:text-text-dark text-lg">
-              <strong>{savedSchedule.medicineName}</strong> – {savedSchedule.dosage}
-            </p>
-
-            <p className="mt-3">
-              <span className="font-medium">💊 Doses per day:</span> {savedSchedule.dosesPerDay}
-            </p>
-
-            <div className="mt-3">
-              <p className="font-medium">⏰ Reminder Times:</p>
-              <ul className="mt-1 ml-4 list-disc">
-                {savedSchedule.times.map((t, i) => (
-                  <li className="text-muted-light dark:text-muted-dark" key={i}>
-                    {t}
-                  </li>
-                ))}
-              </ul>
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+            className="mt-8 p-6 rounded-3xl border border-cyan-400/20 bg-cyan-400/5 backdrop-blur-xl">
+            <h2 className="text-xl font-semibold text-cyan-300 mb-4">📅 Schedule Saved!</h2>
+            <div className="space-y-2 text-white/75 text-sm">
+              <p><span className="text-white font-medium">Medicine:</span> {savedSchedule.medicineName} — {savedSchedule.dosage}</p>
+              <p><span className="text-white font-medium">Doses/day:</span> {savedSchedule.dosesPerDay}</p>
+              <p><span className="text-white font-medium">Times:</span> {savedSchedule.times.join(", ")}</p>
+              <p><span className="text-white font-medium">Duration:</span> {savedSchedule.startDate} → {savedSchedule.endDate}</p>
+              <p><span className="text-white font-medium">Frequency:</span> {savedSchedule.frequency}</p>
             </div>
-
-            <p className="mt-3">
-              <span className="font-medium">📆 Duration:</span> {savedSchedule.startDate} → {savedSchedule.endDate}
-            </p>
-
-            <p className="mt-3">
-              <span className="font-medium">🔁 Frequency:</span> {savedSchedule.frequency}
-            </p>
           </motion.div>
         )}
       </div>

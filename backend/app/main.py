@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from dotenv import load_dotenv
 
+from app.ai_companion_api import router as ai_router
 from app.symptom import router as symptom_router, load_artifacts
 from app.prediction_api1 import router as prediction_router, process_report_data
 
@@ -70,6 +71,7 @@ def startup_event():
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(symptom_router, prefix="/api")
+app.include_router(ai_router, prefix="/api2")
 app.include_router(prediction_router, prefix="/api1")
 
 # ── Health ────────────────────────────────────────────────────────────────────

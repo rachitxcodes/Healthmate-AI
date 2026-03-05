@@ -1,7 +1,6 @@
 // full page changed WITHOUT changing UI
 import { useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import Navbar from "../components/Navbar";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
 
@@ -122,7 +121,6 @@ export default function UploadReport() {
   return (
     
     <div className="min-h-screen bg-gradient-to-b from-[#0A1324] via-[#0B1B33] to-[#0A1324] text-white">
-      <Navbar />
 
       <main className="mx-auto max-w-7xl px-6 pt-40 pb-24">
         {/* Page header */}

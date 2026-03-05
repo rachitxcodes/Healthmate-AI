@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import Navbar from "../components/Navbar";
 import { supabase } from "../supabaseClient";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
@@ -50,12 +49,11 @@ export default function ReportResult() {
 
   if (!resultData) {
     return (
-      <div className="min-h-screen bg-[#0A1324] text-white text-center">
-        <Navbar />
-        <main className="pt-40">
-          <h1 className="text-3xl font-semibold">No Report Data Found</h1>
-          <Link to="/upload-report" className="mt-6 inline-block px-6 py-3 rounded-xl bg-white text-slate-900 font-semibold">Upload Again</Link>
-        </main>
+      <div className="min-h-screen bg-[#0A1324] text-white text-center pt-40">
+        <h1 className="text-3xl font-semibold">No Report Data Found</h1>
+        <Link to="/risk-predictor" className="mt-6 inline-block px-6 py-3 rounded-xl bg-white text-slate-900 font-semibold">
+          Upload Again
+        </Link>
       </div>
     );
   }
@@ -127,8 +125,7 @@ export default function ReportResult() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0A1324] via-[#0B1B33] to-[#0A1324] text-white">
-      <Navbar />
-      <main className="mx-auto max-w-4xl px-6 pt-40 pb-24">
+      <main className="mx-auto max-w-4xl px-6 pt-28 pb-24">
         <AnimatePresence mode="wait">
 
           {/* ── STEP 1: REVIEW ── */}

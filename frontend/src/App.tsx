@@ -15,115 +15,36 @@ import ProfileSettings from "./pages/ProfileSettings";
 import ReportResult from "./pages/ReportResult";
 import ProtectedRoute from "./utils/ProtectedRoute";
 
+// Helper to wrap private pages with NavbarPrivate
+function Private({ children }: { children: React.ReactNode }) {
+  return (
+    <ProtectedRoute>
+      <>
+        <NavbarPrivate />
+        {children}
+      </>
+    </ProtectedRoute>
+  );
+}
+
 export default function App() {
   return (
     <>
-      {/* Public Navbar */}
-      <Navbar />
-
+      {/* Public Navbar — only shown on public pages */}
       <Routes>
-        {/* 🌐 Public Routes */}
-        <Route path="/" element={<Welcome />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/login" element={<LoginPage />} />
+        <Route path="/" element={<><Navbar /><Welcome /></>} />
+        <Route path="/signup" element={<><Navbar /><Signup /></>} />
+        <Route path="/login" element={<><Navbar /><LoginPage /></>} />
 
-        {/* 🔐 Private Routes */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <>
-                <NavbarPrivate />
-                <Dashboard />
-              </>
-            </ProtectedRoute>
-          }
-        />
+        {/* Private Routes — all use NavbarPrivate */}
+        <Route path="/dashboard"         element={<Private><Dashboard /></Private>} />
+        <Route path="/risk-predictor"    element={<Private><RiskPredictor /></Private>} />
+        <Route path="/report-result"     element={<Private><ReportResult /></Private>} />
+        <Route path="/medicine-scheduler" element={<Private><MedicineScheduler /></Private>} />
+        <Route path="/symptom-decoder"   element={<Private><SymptomDecoder /></Private>} />
+        <Route path="/ai-companion"      element={<Private><AiCompanion /></Private>} />
+        <Route path="/settings"          element={<Private><ProfileSettings /></Private>} />
 
-        <Route
-          path="/risk-predictor"
-          element={
-            <ProtectedRoute>
-              <>
-                <NavbarPrivate />
-                <RiskPredictor />
-              </>
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/medicine-scheduler"
-          element={
-            <ProtectedRoute>
-              <>
-                <NavbarPrivate />
-                <MedicineScheduler />
-              </>
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/symptom-decoder"
-          element={
-            <ProtectedRoute>
-              <>
-                <NavbarPrivate />
-                <SymptomDecoder />
-              </>
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/ai-companion"
-          element={
-            <ProtectedRoute>
-              <>
-                <NavbarPrivate />
-                <AiCompanion />
-              </>
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/settings"
-          element={
-            <ProtectedRoute>
-              <>
-                <NavbarPrivate />
-                <ProfileSettings />
-              </>
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/risk-predictor"
-          element={
-            <ProtectedRoute>
-              <>
-                <NavbarPrivate />
-                <RiskPredictor />
-              </>
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/report-result"
-          element={
-            <ProtectedRoute>
-              <>
-                <NavbarPrivate />
-                <ReportResult />
-              </>
-            </ProtectedRoute>
-          }
-        />
-        
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
