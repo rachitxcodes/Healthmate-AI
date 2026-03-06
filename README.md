@@ -129,4 +129,5 @@ npm run dev
 
 # Run backend (FastAPI)
 cd backend
-uvicorn main:app --reload
+pip install -r requirements.txt
+uvicorn app.main:app --reload
