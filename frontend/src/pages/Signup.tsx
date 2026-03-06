@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import Page from "../components/Page";
-import BackgroundAura from "../components/BackgroundAura";
 import GlassCard from "../components/GlassCard";
 import Field from "../components/Field";
 import PrimaryButton from "../components/PrimaryButton";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
+import logo from "../assets/logo4.png";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -16,14 +16,15 @@ export default function Signup() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [isSuccess, setIsSuccess] = useState(false);
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setMessage("");
+    setIsSuccess(false);
 
     try {
-      // 1️⃣ Create auth user
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -42,11 +43,10 @@ export default function Signup() {
         return;
       }
 
-      // 2️⃣ Insert profile row
       const { error: profileError } = await supabase
         .from("profiles")
         .insert({
-          id: data.user.id,      // must match auth.uid()
+          id: data.user.id,
           full_name: fullName,
           email: email,
         });
@@ -57,13 +57,13 @@ export default function Signup() {
         return;
       }
 
-      // 3️⃣ Success
-      setMessage("✅ Account created successfully! Redirecting to login...");
+      setIsSuccess(true);
+      setMessage("Account created successfully! Redirecting...");
       setTimeout(() => navigate("/login"), 1200);
 
     } catch (err) {
       console.error("Signup Error:", err);
-      setMessage("⚠️ Error creating account.");
+      setMessage("Error creating account.");
     } finally {
       setLoading(false);
       setFullName("");
@@ -74,21 +74,25 @@ export default function Signup() {
 
   return (
     <Page>
-      <div className="relative flex min-h-screen items-center justify-center">
-        <BackgroundAura />
-
-        <GlassCard>
-          <motion.h1
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center font-semibold text-slate-800 text-xl"
-          >
-            Create your account
-          </motion.h1>
+      <div className="relative flex min-h-screen items-center justify-center p-4 sm:p-8 bg-surface">
+        <div className="w-full max-w-[440px] mx-auto bg-white rounded-[2rem] p-8 sm:p-10 shadow-[0_8px_40px_rgba(0,0,0,0.04)] border border-rose-100/50 relative z-10 mt-12 mb-12">
+          <div className="flex flex-col items-center mb-10">
+            <div className="p-3 bg-slate-50 flex items-center justify-center rounded-2xl mb-6 shadow-sm border border-slate-100">
+              <img src={logo} alt="HealthMate AI Logo" className="w-12 h-12 rounded-xl object-cover" />
+            </div>
+            <motion.h1
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-center font-black text-[28px] text-slate-900 tracking-tight leading-tight"
+            >
+              Create Account
+            </motion.h1>
+            <p className="text-slate-500 mt-2.5 text-[15px] font-medium text-center">Join HealthMate to start analyzing.</p>
+          </div>
 
           <motion.form
             onSubmit={handleSignup}
-            className="mt-6 space-y-4"
+            className="space-y-6"
           >
             <Field
               label="Full Name"
@@ -96,7 +100,6 @@ export default function Signup() {
               value={fullName}
               onChange={(e: any) => setFullName(e.target.value)}
             />
-
             <Field
               label="Email"
               type="email"
@@ -104,7 +107,6 @@ export default function Signup() {
               value={email}
               onChange={(e: any) => setEmail(e.target.value)}
             />
-
             <Field
               label="Password"
               type="password"
@@ -114,23 +116,25 @@ export default function Signup() {
             />
 
             {message && (
-              <p className="text-center text-sm text-slate-600">
+              <p className={`text-center text-[14px] font-bold p-3 rounded-xl ${isSuccess ? 'bg-emerald-50 text-status-success' : 'bg-rose-50 text-status-critical'}`}>
                 {message}
               </p>
             )}
 
-            <PrimaryButton type="submit" disabled={loading}>
-              {loading ? "Creating..." : "Create Account"}
-            </PrimaryButton>
+            <div className="pt-4">
+              <PrimaryButton type="submit" disabled={loading}>
+                {loading ? "Creating..." : "Create Account"}
+              </PrimaryButton>
+            </div>
           </motion.form>
 
-          <div className="mt-4 text-center text-xs text-slate-500">
+          <div className="mt-8 text-center text-[15px] font-medium text-slate-500">
             Already have an account?{" "}
-            <Link to="/login" className="hover:underline">
+            <Link to="/login" className="text-primary font-bold hover:text-primary-hover transition-colors ml-1">
               Sign in
             </Link>
           </div>
-        </GlassCard>
+        </div>
       </div>
     </Page>
   );

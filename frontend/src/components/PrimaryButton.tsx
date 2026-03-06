@@ -11,7 +11,7 @@ type PrimaryButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> &
 const MotionButton = motion.button;
 
 /**
- * PrimaryButton — Animated, fully typed button (no errors!)
+ * PrimaryButton — Animated, fully typed button
  */
 const PrimaryButton: React.FC<PrimaryButtonProps> = ({
   children,
@@ -26,14 +26,14 @@ const PrimaryButton: React.FC<PrimaryButtonProps> = ({
       type={type}
       disabled={disabled}
       onClick={onClick}
-      whileHover={!disabled ? { scale: 1.03 } : {}}
-      whileTap={!disabled ? { scale: 0.97 } : {}}
+      whileHover={!disabled ? { scale: 1.02 } : {}}
+      whileTap={!disabled ? { scale: 0.96 } : {}}
       transition={{ duration: 0.15 }}
-      className={`rounded-xl px-6 py-3 font-semibold transition-all shadow-md w-full 
-        ${
-          disabled
-            ? "bg-slate-400/60 text-slate-100 cursor-not-allowed opacity-60"
-            : "bg-gradient-to-r from-cyan-400 to-blue-500 text-black hover:opacity-90 hover:shadow-cyan-400/30"
+      style={{ minHeight: '56px' }}
+      className={`rounded-[1.25rem] px-6 py-4 font-bold text-[17px] transition-all shadow-[0_4px_20px_rgba(244,63,94,0.15)] w-full flex justify-center items-center gap-2
+        ${disabled
+          ? "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none border border-slate-200"
+          : "bg-primary text-white hover:bg-primary-hover hover:shadow-[0_8px_30px_rgba(244,63,94,0.25)] hover:-translate-y-0.5"
         } ${className}`}
       {...rest}
     >
