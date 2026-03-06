@@ -153,6 +153,22 @@ def save_message(user_id: str, role: str, content: str):
         print(f"⚠️ Failed to save message (role={role}): {e}")
 
 
+def fetch_user_profile(user_id: str) -> dict:
+    """Fetch user profile from Supabase profiles table."""
+    try:
+        result = (
+            supabase.table("profiles")
+            .select("full_name, email")
+            .eq("id", user_id)
+            .single()
+            .execute()
+        )
+        return result.data or {}
+    except Exception as e:
+        print(f"⚠️ Failed to fetch profile: {e}")
+        return {}
+
+
 # --- 6. OPENROUTER CALL WITH MODEL FALLBACK ---
 
 def call_openrouter(messages_payload: list[dict]) -> str:
@@ -231,6 +247,16 @@ async def handle_chat_message(
 
     # Build system prompt — inject report data if provided
     system_content = SYSTEM_PROMPT
+    # Inject user profile
+    profile = fetch_user_profile(user_id)
+    full_name = profile.get("full_name", "").strip()
+    if full_name:
+        system_content += (
+            f"\n\nThe user's name is {full_name}. "
+            "Address them by their first name naturally throughout the conversation. "
+            "Never ask for their name — you already know it."
+        )
+        
     if report_context:
         system_content += (
             "\n\nThe user has recently uploaded and analysed a health report. "
