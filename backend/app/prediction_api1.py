@@ -322,6 +322,7 @@ Return ONLY this exact JSON (no markdown, no extra text):
 
     # Free text models — no vision needed, much less rate limited
     TEXT_MODELS = [
+        "nvidia/nemotron-nano-12b-v2-vl:free"
         "google/gemma-3-12b-it:free",
         "google/gemma-3-4b-it:free",
         "mistralai/mistral-small-3.1-24b-instruct:free",
