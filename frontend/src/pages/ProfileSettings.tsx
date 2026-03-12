@@ -1,68 +1,50 @@
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import NavbarPrivate from "../components/NavbarPrivate";
-import GlassCard from "../components/GlassCard";
-import Field from "../components/Field";
-import PrimaryButton from "../components/PrimaryButton";
+import { Camera, Bell, User, Phone, Calendar, LogOut, Save } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
-import { useEffect, useState } from "react";
-import { Camera, Bell, Moon, Sun, LogOut } from "lucide-react";
 import { supabase } from "../supabaseClient";
 
 export default function ProfileSettings() {
   const { user, signOut, loading } = useAuth();
 
-  // Profile fields (DB-backed)
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [dob, setDob] = useState("");
 
-  // Toggles (local for now)
   const [notifications, setNotifications] = useState(true);
   const [emailReminder, setEmailReminder] = useState(false);
   const [medicineReminder, setMedicineReminder] = useState(true);
 
-  // Theme
-  const [darkMode, setDarkMode] = useState(true);
-
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
-  // 🔄 Load profile from DB
   useEffect(() => {
     if (!user) return;
-
     const fetchProfile = async () => {
       const { data, error } = await supabase
         .from("profiles")
         .select("full_name, email")
         .eq("id", user.id)
         .single();
-
       if (!error && data) {
         setName(data.full_name || "");
         setEmail(data.email || user.email || "");
       }
     };
-
     fetchProfile();
   }, [user]);
 
   if (loading) return null;
 
-  // 💾 Save profile changes
   const handleSave = async () => {
     if (!user) return;
-
     setSaving(true);
     setMessage("");
 
     const { error } = await supabase
       .from("profiles")
-      .update({
-        full_name: name,
-        // phone & dob can be added later to table
-      })
+      .update({ full_name: name })
       .eq("id", user.id);
 
     if (error) {
@@ -70,7 +52,6 @@ export default function ProfileSettings() {
     } else {
       setMessage("✅ Profile updated successfully");
     }
-
     setSaving(false);
   };
 
@@ -79,175 +60,126 @@ export default function ProfileSettings() {
     window.location.href = "/";
   };
 
-  return (
-    <div
-      className={`min-h-screen ${
-        darkMode
-          ? "bg-gradient-to-b from-[#0A1324] via-[#0B1B33] to-[#0A1324] text-white"
-          : "bg-gradient-to-b from-slate-100 via-white to-slate-200 text-slate-900"
-      }`}
-    >
-      <NavbarPrivate />
+  const inputClass = "w-full px-4 py-3 bg-white border border-slate-300 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-400/30 focus:border-rose-400 transition-all font-medium placeholder:text-slate-400";
+  const labelClass = "block text-sm font-bold text-slate-700 mb-1.5 ml-1";
 
-      <div className="pt-24 max-w-5xl mx-auto px-4 pb-20 space-y-10">
-        {/* USER HEADER */}
-        <GlassCard className="p-8 flex items-center gap-6">
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="relative group"
-          >
-            <div className="w-28 h-28 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-3xl font-bold">
-              {name ? name[0].toUpperCase() : "U"}
+  return (
+    <div className="w-full text-text-primary px-4 sm:px-6 pt-4 pb-24 max-w-[1100px] mx-auto animate-in fade-in duration-500">
+      {/* HEADER */}
+      <div className="mb-8 mt-4 md:mt-8">
+        <h1 className="text-3xl md:text-[2.5rem] font-bold tracking-tight text-slate-900 leading-tight mb-2">
+          Profile Settings
+        </h1>
+        <p className="text-slate-500 font-semibold text-base md:text-lg">Manage your personal information and preferences.</p>
+      </div>
+
+      <div className="grid lg:grid-cols-12 gap-8">
+
+        {/* LEFT COLUMN: Profile Info */}
+        <div className="lg:col-span-8 flex flex-col gap-8">
+
+          {/* USER HEADER CARD */}
+          <div className="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col md:flex-row items-center gap-8">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="relative group shrink-0">
+              <div className="w-28 h-28 rounded-[2rem] bg-slate-900 shadow-lg border border-slate-800 flex items-center justify-center text-4xl font-black text-white">
+                {name ? name[0].toUpperCase() : "U"}
+              </div>
+              <button className="absolute -bottom-3 -right-3 bg-white border border-slate-200 text-slate-700 p-2.5 rounded-full shadow-md hover:bg-slate-50 transition-colors">
+                <Camera size={18} />
+              </button>
+            </motion.div>
+            <div className="text-center md:text-left">
+              <h2 className="text-2xl md:text-3xl font-bold text-slate-900">{name || "User"}</h2>
+              <p className="text-slate-500 font-semibold">{email}</p>
+            </div>
+          </div>
+
+          {/* ACCOUNT INFO FORM */}
+          <div className="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+            <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+              <User size={20} className="text-slate-400" /> Account Information
+            </h3>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              <div>
+                <label className={labelClass}>Full Name</label>
+                <input type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} placeholder="Jane Doe" />
+              </div>
+              <div>
+                <label className={labelClass}>Email Address</label>
+                <input type="email" value={email} disabled className={`${inputClass} bg-slate-50 text-slate-500 cursor-not-allowed`} />
+              </div>
+              <div>
+                <label className={labelClass}>Phone Number</label>
+                <div className="relative">
+                  <Phone size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={`${inputClass} pl-11`} placeholder="+1 (555) 000-0000" />
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Date of Birth</label>
+                <div className="relative">
+                  <Calendar size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className={`${inputClass} pl-11`} />
+                </div>
+              </div>
             </div>
 
-            <button className="absolute -bottom-2 -right-2 bg-white text-black p-2 rounded-full shadow-md hover:bg-slate-200 transition">
-              <Camera size={16} />
+            <div className="mt-8 flex items-center gap-4 border-t border-slate-100 pt-6">
+              <button onClick={handleSave} disabled={saving} className="bg-slate-900 hover:bg-black text-white px-8 py-3 rounded-xl font-bold transition-all shadow-md shadow-black/10 flex items-center gap-2">
+                <Save size={18} /> {saving ? "Saving..." : "Save Changes"}
+              </button>
+              {message && <span className="text-sm font-semibold text-slate-600">{message}</span>}
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: Preferences */}
+        <div className="lg:col-span-4 flex flex-col gap-8">
+
+          <div className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-8 text-white shadow-[0_12px_40px_rgba(0,0,0,0.12)] h-full flex flex-col">
+            <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+              <Bell size={20} className="text-slate-400" /> Preferences
+            </h3>
+
+            <div className="flex flex-col gap-6">
+              <ToggleRow label="Push Notifications" desc="Updates on your device" enabled={notifications} setEnabled={setNotifications} />
+              <div className="h-px bg-white/10 w-full" />
+              <ToggleRow label="Email Reminders" desc="Weekly health summaries" enabled={emailReminder} setEnabled={setEmailReminder} />
+              <div className="h-px bg-white/10 w-full" />
+              <ToggleRow label="Medicine Alerts" desc="Keep track of your schedule" enabled={medicineReminder} setEnabled={setMedicineReminder} />
+            </div>
+          </div>
+
+          <div className="bg-white rounded-[2rem] p-6 border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] mt-auto">
+            <button onClick={handleLogout} className="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-colors border border-rose-100">
+              <LogOut size={18} strokeWidth={2.5} />
+              Sign Out Securely
             </button>
-          </motion.div>
-
-          <div>
-            <h2 className="text-3xl font-bold">{name || "User"}</h2>
-            <p className="opacity-80">{email}</p>
           </div>
-        </GlassCard>
-
-        {/* ACCOUNT INFORMATION */}
-        <GlassCard className="p-8">
-          <h3 className="text-xl font-semibold mb-6">Account Information</h3>
-
-          <div className="grid md:grid-cols-2 gap-6">
-            <Field
-              label="Full Name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-
-            <Field
-              label="Email"
-              value={email}
-              type="email"
-              disabled
-            />
-
-            <Field
-              label="Phone Number"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
-
-            <Field
-              label="Date of Birth"
-              type="date"
-              value={dob}
-              onChange={(e) => setDob(e.target.value)}
-            />
-          </div>
-
-          {message && (
-            <p className="mt-4 text-sm text-center opacity-80">
-              {message}
-            </p>
-          )}
-
-          <PrimaryButton
-            className="mt-6"
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? "Saving..." : "Save Changes"}
-          </PrimaryButton>
-        </GlassCard>
-
-        {/* PREFERENCES */}
-        <GlassCard className="p-8">
-          <h3 className="text-xl font-semibold mb-6">Preferences</h3>
-
-          <div className="space-y-4">
-            <ToggleRow
-              icon={<Bell size={18} />}
-              label="Enable Push Notifications"
-              enabled={notifications}
-              setEnabled={setNotifications}
-            />
-
-            <ToggleRow
-              icon={<Bell size={18} />}
-              label="Email Reminders"
-              enabled={emailReminder}
-              setEnabled={setEmailReminder}
-            />
-
-            <ToggleRow
-              icon={<Bell size={18} />}
-              label="Medicine Intake Reminders"
-              enabled={medicineReminder}
-              setEnabled={setMedicineReminder}
-            />
-
-            <ToggleRow
-              icon={darkMode ? <Moon size={18} /> : <Sun size={18} />}
-              label={darkMode ? "Dark Mode" : "Light Mode"}
-              enabled={darkMode}
-              setEnabled={setDarkMode}
-            />
-          </div>
-        </GlassCard>
-
-        {/* LOGOUT */}
-        <GlassCard className="p-8">
-          <h3 className="text-xl font-semibold mb-6">Account</h3>
-
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl 
-            bg-white/10 border border-white/20 text-white hover:bg-white/20 transition"
-          >
-            <LogOut size={18} />
-            Logout
-          </button>
-        </GlassCard>
+        </div>
       </div>
     </div>
   );
 }
 
-/* ---------------- TOGGLE COMPONENT ---------------- */
-
+// Custom Toggle Component
 interface ToggleRowProps {
-  icon: React.ReactNode;
   label: string;
+  desc: string;
   enabled: boolean;
-  setEnabled: (value: boolean) => void;
-  disabled?: boolean;
+  setEnabled: (val: boolean) => void;
 }
 
-function ToggleRow({
-  icon,
-  label,
-  enabled,
-  setEnabled,
-  disabled = false,
-}: ToggleRowProps) {
+function ToggleRow({ label, desc, enabled, setEnabled }: ToggleRowProps) {
   return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <div className="text-cyan-300">{icon}</div>
-        <p>{label}</p>
+    <div className="flex items-center justify-between group cursor-pointer" onClick={() => setEnabled(!enabled)}>
+      <div>
+        <h4 className="font-bold text-slate-100 mb-0.5 group-hover:text-white transition-colors">{label}</h4>
+        <p className="text-[13px] text-slate-400 font-medium leading-tight">{desc}</p>
       </div>
-
-      <div
-        onClick={() => !disabled && setEnabled(!enabled)}
-        className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition 
-          ${enabled ? "bg-cyan-400" : "bg-white/20"} 
-          ${disabled ? "opacity-40 cursor-not-allowed" : ""}
-        `}
-      >
-        <div
-          className={`bg-white w-4 h-4 rounded-full shadow-md transform transition 
-            ${enabled ? "translate-x-6" : "translate-x-0"}
-          `}
-        />
+      <div className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-300 ${enabled ? "bg-emerald-500" : "bg-slate-700"}`}>
+        <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ${enabled ? "translate-x-6" : "translate-x-0"}`} />
       </div>
     </div>
   );

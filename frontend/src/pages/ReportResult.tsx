@@ -1,7 +1,9 @@
-import { Link } from "react-router-dom";
-import { useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../supabaseClient";
+import GlassCard from "../components/GlassCard";
+import PrimaryButton from "../components/PrimaryButton";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
@@ -28,38 +30,72 @@ interface ApiResult {
 
 function riskColor(pct: string) {
   const v = parseFloat(pct);
-  if (v >= 60) return { text: "text-rose-400", bar: "bg-rose-500", badge: "bg-rose-500/20 text-rose-300 border-rose-500/30", label: "High Risk", glow: "shadow-rose-500/20" };
-  if (v >= 35) return { text: "text-amber-400", bar: "bg-amber-400", badge: "bg-amber-500/20 text-amber-300 border-amber-500/30", label: "Moderate Risk", glow: "shadow-amber-500/20" };
-  return { text: "text-emerald-400", bar: "bg-emerald-400", badge: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30", label: "Low Risk", glow: "shadow-emerald-500/20" };
+  if (v >= 60) return { text: "text-status-critical", bar: "bg-status-critical", badge: "bg-status-critical/10 text-status-critical", label: "High Risk", glow: "shadow-status-critical/10" };
+  if (v >= 35) return { text: "text-status-warning", bar: "bg-status-warning", badge: "bg-status-warning/10 text-status-warning", label: "Moderate Risk", glow: "shadow-status-warning/10" };
+  return { text: "text-status-success", bar: "bg-status-success", badge: "bg-status-success/10 text-status-success", label: "Low Risk", glow: "shadow-status-success/10" };
 }
 
 function formatDiseaseName(key: string) {
   return key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
 
+const DataSlider = ({ label, value }: { label: string, value: string | number }) => {
+  const num = parseFloat(String(value));
+  let pos = 50;
+  if (!isNaN(num)) {
+    pos = 30 + (num % 40);
+  }
+  return (
+    <div className="flex items-center justify-between mb-4 w-full gap-4">
+      <div className="w-[40%]">
+        <span className="text-sm font-bold text-slate-500 leading-tight line-clamp-2" title={label}>{label.replace(/_/g, ' ')}</span>
+      </div>
+      <div className="w-[40%] relative h-3 bg-slate-100 shadow-inner rounded-full flex items-center border border-slate-200/50">
+        <div className="absolute left-[30%] right-[30%] h-full bg-rose-400/20 rounded-full"></div>
+        <motion.div
+          initial={{ left: "0%" }}
+          animate={{ left: `${pos}%` }}
+          transition={{ type: "spring", stiffness: 100, damping: 20 }}
+          className="absolute w-5 h-5 bg-white border-[2.5px] border-rose-500 rounded-full shadow-[0_2px_8px_rgba(244,63,94,0.3)] -ml-2.5"
+        />
+      </div>
+      <div className="w-[20%] text-right font-mono text-sm font-bold text-slate-900">
+        {value}
+      </div>
+    </div>
+  );
+};
+
 export default function ReportResult() {
+  const location = useLocation();
   const stored = sessionStorage.getItem("healthmate_report_result");
   const resultData: ApiResult | null = stored ? JSON.parse(stored) : null;
 
-  const [editableData, setEditableData] = useState<Record<string, any>>(resultData?.extracted_data ?? {});
-  const [step, setStep]         = useState<"review" | "results">("review");
-  const [loading, setLoading]   = useState(false);
+  const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [results, setResults]   = useState<Record<string, DiseaseResult>>({});
+  const [results, setResults] = useState<Record<string, DiseaseResult>>({});
+
+  useEffect(() => {
+    // Automatically trigger the analysis if we just arrived from RiskPredictor
+    if (location.state?.triggerAnalysis && resultData) {
+      handleConfirm();
+      // Clear history state to prevent re-triggering on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, []);
 
   if (!resultData) {
     return (
-      <div className="min-h-screen bg-[#0A1324] text-white text-center pt-40">
-        <h1 className="text-3xl font-semibold">No Report Data Found</h1>
-        <Link to="/risk-predictor" className="mt-6 inline-block px-6 py-3 rounded-xl bg-white text-slate-900 font-semibold">
-          Upload Again
+      <div className="min-h-screen text-slate-900 text-center pt-40 px-4">
+        <h1 className="text-3xl font-bold">No Report Data Found</h1>
+        <Link to="/risk-predictor" className="mt-6 inline-block">
+          <PrimaryButton className="w-auto">Upload a Report</PrimaryButton>
         </Link>
       </div>
     );
   }
 
-  // Fetch explanation for a single disease and update state
-  const fetchExplanation = async (disease: string, prediction: DiseaseResult, session: any) => {
+  const fetchExplanation = async (disease: string, prediction: DiseaseResult, session: any, editableData: any) => {
     try {
       const res = await fetch(`${API_BASE_URL}/api1/explain`, {
         method: "POST",
@@ -88,6 +124,9 @@ export default function ReportResult() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
+      // Grab the extraction dataset confirmed by the user in RiskPredictor.tsx
+      const editableData = resultData.extracted_data;
+
       const res = await fetch(`${API_BASE_URL}/api1/predict-risk`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
@@ -97,23 +136,19 @@ export default function ReportResult() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Analysis failed");
 
-      // Only diseases that ran
       const ran = Object.fromEntries(
         Object.entries(data.predictions ?? {}).filter(([_, v]) => (v as Prediction).ran)
       ) as Record<string, DiseaseResult>;
 
-      // Mark all as loading explanation
       const withLoading = Object.fromEntries(
         Object.entries(ran).map(([k, v]) => [k, { ...v, loadingExplanation: true }])
       ) as Record<string, DiseaseResult>;
 
       setResults(withLoading);
-      setStep("results");
-      setTimeout(() => document.getElementById("results-top")?.scrollIntoView({ behavior: "smooth" }), 200);
+      setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 200);
 
-      // Fire explanation requests for all diseases in parallel
       Object.entries(ran).forEach(([disease, prediction]) => {
-        fetchExplanation(disease, prediction, session);
+        fetchExplanation(disease, prediction, session, editableData);
       });
 
     } catch (err: any) {
@@ -124,190 +159,141 @@ export default function ReportResult() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#0A1324] via-[#0B1B33] to-[#0A1324] text-white">
-      <main className="mx-auto max-w-4xl px-6 pt-28 pb-24">
-        <AnimatePresence mode="wait">
+    <div className="w-full text-text-primary">
+      <main className="mx-auto max-w-5xl px-4 sm:px-6 pt-8 pb-32 flex flex-col items-center">
 
-          {/* ── STEP 1: REVIEW ── */}
-          {step === "review" && (
-            <motion.div key="review" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -18 }}>
-              <div className="text-center mb-10">
-                <h1 className="text-[40px] font-semibold">Report Review</h1>
-                <p className="mt-2 text-white/60">Review the extracted values. Edit anything that looks wrong before analysis.</p>
-              </div>
-
-              <div className="rounded-3xl border border-white/10 bg-white/[0.035] backdrop-blur-2xl p-6 sm:p-8">
-                <h2 className="text-xl font-semibold mb-6 text-white/90">📋 Extracted Medical Parameters</h2>
-                {Object.keys(editableData).length === 0 ? (
-                  <p className="text-white/50">No values extracted. Try uploading a clearer image.</p>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-4">
-                    {Object.entries(editableData).map(([key, value]) => (
-                      <div key={key} className="flex justify-between items-center border-b border-white/10 pb-3">
-                        <span className="text-white/60 text-sm font-medium">{key}</span>
-                        <input
-                          value={String(value)}
-                          onChange={(e) => setEditableData({ ...editableData, [key]: e.target.value })}
-                          className="bg-transparent text-right text-white text-sm w-36 border-b border-white/20 focus:outline-none focus:border-cyan-400 transition-colors"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {errorMsg && <p className="mt-4 text-rose-400 text-sm">{errorMsg}</p>}
-
-                <button
-                  onClick={handleConfirm}
-                  disabled={loading || Object.keys(editableData).length === 0}
-                  className="mt-8 w-full py-4 rounded-2xl bg-cyan-400 text-slate-900 font-bold text-lg hover:bg-cyan-300 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                >
-                  {loading ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                      </svg>
-                      Analyzing...
-                    </span>
-                  ) : "Confirm & Analyze →"}
-                </button>
-              </div>
-            </motion.div>
-          )}
-
-          {/* ── STEP 2: RESULTS ── */}
-          {step === "results" && (
-            <motion.div key="results" id="results-top" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-              <div className="text-center mb-10">
-                <h1 className="text-[40px] font-semibold">Analysis Results</h1>
-                <p className="mt-2 text-white/60">
-                  {Object.keys(results).length} disease risk{Object.keys(results).length !== 1 ? "s" : ""} analyzed from your report.
+        {loading ? (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center mt-32">
+            <div className="h-24 w-24 rounded-full border-4 border-rose-100 border-t-rose-500 animate-spin mb-6 shadow-lg shadow-rose-500/20" />
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight">AI is analyzing your report...</h2>
+            <p className="text-slate-500 font-medium mt-2">Checking against thousands of medical markers.</p>
+          </motion.div>
+        ) : (
+          <AnimatePresence mode="wait">
+            <motion.div key="results" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="w-full">
+              <div className="text-center mb-12 max-w-2xl mx-auto mt-4 md:mt-10">
+                <h1 className="text-4xl sm:text-[2.75rem] font-black tracking-tight mb-4 text-slate-900">Your Intelligence Report</h1>
+                <p className="text-slate-500 font-semibold text-lg max-w-2xl mx-auto">
+                  We've analyzed your data points. Here is a breakdown of your current health markers and what they suggest.
                 </p>
               </div>
 
-              {Object.keys(results).length === 0 ? (
-                <div className="text-center rounded-3xl border border-white/10 bg-white/[0.03] p-12">
-                  <p className="text-5xl mb-4">🔬</p>
-                  <p className="text-white/50 text-lg">No predictions could be made from this report.</p>
-                  <p className="text-white/30 text-sm mt-2">Upload a report with more relevant medical parameters.</p>
-                  <Link to="/upload-report" className="mt-6 inline-block px-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 transition">Upload Different Report</Link>
+              {errorMsg && (
+                <div className="mb-8 p-6 bg-rose-50 border border-status-critical/20 rounded-2xl flex flex-col items-center text-center">
+                  <p className="text-status-critical font-bold mb-4">{errorMsg}</p>
+                  <Link to="/risk-predictor">
+                    <PrimaryButton className="!py-3 !px-6">Return to Risk Predictor</PrimaryButton>
+                  </Link>
                 </div>
+              )}
+
+              {Object.keys(results).length === 0 && !errorMsg ? (
+                <GlassCard className="text-center border-dashed border-2 py-16">
+                  <div className="text-5xl mb-6 inline-block bg-slate-100 p-6 rounded-3xl">🔬</div>
+                  <h3 className="text-2xl font-black text-slate-900 mb-3 tracking-tight">Insufficient Data</h3>
+                  <p className="text-slate-500 font-medium mb-8 max-w-md mx-auto">
+                    No specific predictions could be made from the extracted parameters. Try ensuring all relevant markers are clearly visible.
+                  </p>
+                  <Link to="/risk-predictor" className="inline-block">
+                    <PrimaryButton className="w-auto px-8 shadow-sm text-[16px]">Upload Different Report</PrimaryButton>
+                  </Link>
+                </GlassCard>
               ) : (
-                <div className="space-y-6">
+                <div className="space-y-8 w-full">
                   {Object.entries(results).map(([disease, result], i) => {
                     const risk = riskColor(result.risk_percent!);
                     return (
-                      <motion.div
-                        key={disease}
-                        initial={{ opacity: 0, y: 24 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.1 }}
-                        className={`rounded-3xl border border-white/10 bg-white/[0.035] backdrop-blur-xl overflow-hidden shadow-2xl ${risk.glow}`}
-                      >
-                        {/* ── Risk Header ── */}
-                        <div className="p-6 sm:p-8 pb-5">
-                          <div className="flex items-start justify-between mb-5">
+                      <motion.div key={disease} initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}>
+                        <GlassCard className={`!p-0 overflow-hidden ${risk.glow} border-t-8 ${risk.bar.replace('bg-', 'border-t-')}`}>
+
+                          {/* HEADER REGION */}
+                          <div className="p-6 sm:p-8 sm:pb-6 flex flex-col md:flex-row md:items-end justify-between gap-6">
                             <div>
-                              <p className="text-white/40 text-xs uppercase tracking-widest mb-1">Disease Risk</p>
-                              <h3 className="text-2xl font-bold">{formatDiseaseName(disease)}</h3>
+                              <p className="text-slate-400 text-xs uppercase tracking-widest font-bold mb-2">Health Assessment</p>
+                              <h3 className="text-[2rem] font-black text-slate-900 tracking-tight leading-none">{formatDiseaseName(disease)}</h3>
                             </div>
-                            <span className={`text-xs font-bold px-3 py-1.5 rounded-full border ${risk.badge}`}>
-                              {risk.label}
-                            </span>
-                          </div>
-
-                          <p className={`text-7xl font-black mb-4 leading-none ${risk.text}`}>
-                            {result.risk_percent}
-                          </p>
-
-                          <div className="h-2.5 w-full rounded-full bg-white/10 overflow-hidden mb-5">
-                            <motion.div
-                              initial={{ width: 0 }}
-                              animate={{ width: result.risk_percent }}
-                              transition={{ duration: 1.2, ease: "easeOut", delay: i * 0.1 + 0.2 }}
-                              className={`h-full rounded-full ${risk.bar}`}
-                            />
-                          </div>
-
-
-                        </div>
-
-                        {/* ── AI Explanation ── */}
-                        <div className="border-t border-white/10 px-6 sm:px-8 py-6">
-                          {result.loadingExplanation ? (
-                            <div className="space-y-3">
-                              <div className="flex items-center gap-2 text-white/40 text-sm mb-4">
-                                <svg className="animate-spin h-4 w-4 text-cyan-400" viewBox="0 0 24 24" fill="none">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                                </svg>
-                                <span className="text-cyan-400/70">Generating your personalized health insights...</span>
-                              </div>
-                              {/* Skeleton loaders */}
-                              <div className="h-3 bg-white/5 rounded-full w-full animate-pulse"/>
-                              <div className="h-3 bg-white/5 rounded-full w-5/6 animate-pulse"/>
-                              <div className="h-3 bg-white/5 rounded-full w-4/6 animate-pulse"/>
-                            </div>
-                          ) : result.explanation ? (
-                            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                              {/* What this means */}
-                              <div className="rounded-2xl bg-white/[0.04] border border-white/8 p-5">
-                                <div className="flex items-center gap-2 mb-3">
-                                  <span className="text-lg">💡</span>
-                                  <h4 className="text-sm font-bold text-white/70 uppercase tracking-wider">What This Means For You</h4>
-                                </div>
-                                <p className="text-white/85 text-sm leading-7">{result.explanation}</p>
-                              </div>
-
-                              {/* Precautions */}
-                              {result.precautions && result.precautions.length > 0 && (
-                                <div className="rounded-2xl bg-white/[0.04] border border-white/8 p-5">
-                                  <div className="flex items-center gap-2 mb-4">
-                                    <span className="text-lg">🛡️</span>
-                                    <h4 className="text-sm font-bold text-white/70 uppercase tracking-wider">Recommended Actions</h4>
-                                  </div>
-                                  <ul className="space-y-3">
-                                    {result.precautions.map((p, idx) => (
-                                      <motion.li
-                                        key={idx}
-                                        initial={{ opacity: 0, x: -8 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        transition={{ delay: idx * 0.07 }}
-                                        className="flex items-start gap-3 text-sm text-white/75 leading-relaxed"
-                                      >
-                                        <span className={`mt-0.5 shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${risk.badge}`}>
-                                          {idx + 1}
-                                        </span>
-                                        {p}
-                                      </motion.li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-
-                              {/* Disclaimer */}
-                              <p className="text-white/25 text-xs text-center">
-                                ⚕️ This is an AI-generated health insight, not a medical diagnosis. Always consult a qualified doctor.
+                            <div className="flex flex-col md:items-end">
+                              <span className={`text-[11px] uppercase tracking-wider font-bold px-4 py-1.5 rounded-full mb-3 inline-block self-start md:self-auto ${risk.badge}`}>
+                                {risk.label} Marker
+                              </span>
+                              <p className={`text-6xl font-black leading-none tracking-tighter ${risk.text}`}>
+                                {result.risk_percent}
                               </p>
-                            </motion.div>
-                          ) : null}
-                        </div>
+                            </div>
+                          </div>
+
+                          {/* SLIDER AND PARAMETERS (Z-LAYOUT) */}
+                          <div className="px-6 sm:px-8 pb-8 pt-4 border-b border-slate-100 bg-white">
+                            <h4 className="text-[11px] font-bold text-slate-400 mb-5 uppercase tracking-wider">Parameters Analyzed</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-3">
+                              {result.matched_features.map((featureKey) => (
+                                <DataSlider key={featureKey} label={featureKey} value={resultData!.extracted_data[featureKey]} />
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* EXPLANATION */}
+                          <div className="p-6 sm:p-8 bg-slate-50/50">
+                            {result.loadingExplanation ? (
+                              <div className="space-y-5">
+                                <div className="flex items-center gap-3 text-sm font-bold text-slate-900">
+                                  <svg className="animate-spin h-5 w-5 text-rose-500" viewBox="0 0 24 24" fill="none">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                                  </svg>
+                                  Generating your personalized insights...
+                                </div>
+                                <div className="h-3 bg-slate-200/60 rounded-full w-full animate-pulse" />
+                                <div className="h-3 bg-slate-200/60 rounded-full w-5/6 animate-pulse" />
+                                <div className="h-3 bg-slate-200/60 rounded-full w-4/6 animate-pulse" />
+                              </div>
+                            ) : result.explanation ? (
+                              <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                                <div className="bg-white rounded-[1.5rem] p-6 sm:p-8 border border-slate-200 shadow-sm relative overflow-hidden">
+                                  <div className="flex items-center gap-3 mb-4 relative z-10">
+                                    <div className="bg-rose-50 p-2.5 rounded-xl text-rose-500 shadow-sm border border-rose-100/50"><span className="text-xl">💡</span></div>
+                                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-widest">What This Means For You</h4>
+                                  </div>
+                                  <p className="text-slate-600 text-[15px] leading-relaxed font-medium relative z-10">{result.explanation}</p>
+                                </div>
+
+                                {result.precautions && result.precautions.length > 0 && (
+                                  <div className="bg-white rounded-[1.5rem] p-6 sm:p-8 border border-slate-200 shadow-sm relative overflow-hidden mt-6">
+                                    <div className="flex items-center gap-3 mb-5 relative z-10">
+                                      <div className="bg-emerald-50 p-2.5 rounded-xl text-emerald-500 shadow-sm border border-emerald-100/50"><span className="text-xl">🛡️</span></div>
+                                      <h4 className="text-xs font-bold text-slate-900 uppercase tracking-widest">Recommended Actions</h4>
+                                    </div>
+                                    <ul className="space-y-3 relative z-10">
+                                      {result.precautions.map((p, idx) => (
+                                        <motion.li key={idx} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} className="flex items-start gap-4 text-[15px] font-medium text-slate-600 leading-relaxed p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                                          <span className="shrink-0 w-7 h-7 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center text-xs font-bold border border-emerald-200/50">{idx + 1}</span>
+                                          <span className="mt-0.5">{p}</span>
+                                        </motion.li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                                <p className="text-[11px] text-slate-400 text-center font-bold tracking-wide italic mt-6">
+                                  ⚕️ AI-GENERATED HEALTH INSIGHT. ALWAYS CONSULT A DOCTOR FOR DIAGNOSIS.
+                                </p>
+                              </motion.div>
+                            ) : null}
+                          </div>
+                        </GlassCard>
                       </motion.div>
                     );
                   })}
 
-                  <button
-                    onClick={() => setStep("review")}
-                    className="w-full py-3 rounded-2xl border border-white/10 text-white/40 hover:text-white/70 hover:border-white/20 transition text-sm"
-                  >
-                    ← Review & Edit Values
-                  </button>
+                  <div className="flex justify-center pt-8">
+                    <Link to="/risk-predictor" className="text-slate-500 font-bold hover:text-rose-500 transition-colors py-2 px-4 rounded-xl border border-transparent hover:bg-white hover:border-slate-200 shadow-sm">
+                      ← Scan another report
+                    </Link>
+                  </div>
                 </div>
               )}
             </motion.div>
-          )}
-        </AnimatePresence>
+          </AnimatePresence>
+        )}
       </main>
     </div>
   );
