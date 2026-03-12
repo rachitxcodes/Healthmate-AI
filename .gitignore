@@ -64,3 +64,8 @@ Thumbs.db
 *.csv
 *.sqlite3
 *.db
+backend/app/__pycache__/main.cpython-313.pyc
+backend/app/__pycache__/ai_companion_api.cpython-313.pyc
+backend/app/__pycache__/symptom.cpython-313.pyc
+backend/app/__pycache__/prediction_api1.cpython-313.pyc
+backend/app/__pycache__/__init__.cpython-313.pyc
