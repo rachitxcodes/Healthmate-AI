@@ -8,7 +8,7 @@ import { UploadCloud, CheckCircle2, AlertCircle, Edit3, Trash2, FileText, Chevro
 import { saveReportToHistory, getReportHistory, deleteReportById, ReportRecord } from "../utils/reportHistory";
 import { v4 as uuidv4 } from "uuid";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://healthmate-api-2qu0.onrender.com";
 
 export default function RiskPredictor() {
   const inputRef = useRef<HTMLInputElement>(null);

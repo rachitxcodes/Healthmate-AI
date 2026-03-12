@@ -8,7 +8,7 @@ type Message = {
   text: string;
 };
 
-const API_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_BASE_URL || "https://healthmate-api-2qu0.onrender.com";
 
 export default function AiCompanion() {
   const [messages, setMessages] = useState<Message[]>([]);

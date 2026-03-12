@@ -16,7 +16,7 @@ export default function SymptomDecoder() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const API_URL = (import.meta as any).env?.VITE_API_URL || "http://localhost:8000";
+  const API_URL = (import.meta as any).env?.VITE_API_URL || "https://healthmate-api-2qu0.onrender.com";
   const debouncedQuery = useDebounce(searchQuery, 250);
 
   const addSymptom = (s: string) => {
