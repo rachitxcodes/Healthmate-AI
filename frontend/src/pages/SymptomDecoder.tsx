@@ -68,6 +68,7 @@ export default function SymptomDecoder() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
         {/* LEFT COLUMN: Input */}
         <div className="lg:col-span-6 flex flex-col gap-6">
           <div className="bg-white rounded-[2rem] p-8 sm:p-10 border border-rose-100 shadow-[0_8px_40px_rgba(0,0,0,0.04)]">
@@ -155,20 +156,20 @@ export default function SymptomDecoder() {
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Results */}
+        {/* RIGHT COLUMN: Results — matches left card style */}
         <div className="lg:col-span-6">
-          <div className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-8 sm:p-10 text-white shadow-[0_12px_40px_rgba(0,0,0,0.12)] h-full flex flex-col">
+          <div className="bg-white rounded-[2rem] p-8 sm:p-10 border border-rose-100 shadow-[0_8px_40px_rgba(0,0,0,0.04)] h-full flex flex-col">
             <div className="flex justify-between items-center mb-8">
-              <h3 className="font-bold text-xl tracking-tight">AI Differential Diagnosis</h3>
+              <h3 className="font-bold text-xl tracking-tight text-slate-900">AI Differential Diagnosis</h3>
               <Brain size={24} className="text-slate-400" />
             </div>
 
             {/* Empty State */}
             {!loading && predictions.length === 0 && (
-              <div className="flex-1 flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-slate-800 rounded-3xl bg-white/5">
-                <Activity size={40} className="text-slate-600 mb-4" />
-                <h4 className="text-lg font-bold text-slate-300 mb-2">Awaiting Symptoms</h4>
-                <p className="text-slate-500 text-sm font-medium">Add your symptoms and click predict to see potential condition matches.</p>
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50">
+                <Activity size={40} className="text-slate-300 mb-4" />
+                <h4 className="text-lg font-bold text-slate-400 mb-2">Awaiting Symptoms</h4>
+                <p className="text-slate-400 text-sm font-medium">Add your symptoms and click predict to see potential condition matches.</p>
               </div>
             )}
 
@@ -176,9 +177,9 @@ export default function SymptomDecoder() {
             {loading && (
               <div className="flex-1 flex flex-col gap-4">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="p-6 rounded-2xl bg-white/5 border border-white/10 animate-pulse">
-                    <div className="h-5 w-1/3 bg-white/10 rounded-full mb-4" />
-                    <div className="h-2 w-full bg-white/5 rounded-full" />
+                  <div key={i} className="p-6 rounded-2xl bg-slate-50 border border-slate-100 animate-pulse">
+                    <div className="h-5 w-1/3 bg-slate-200 rounded-full mb-4" />
+                    <div className="h-2 w-full bg-slate-100 rounded-full" />
                   </div>
                 ))}
               </div>
@@ -193,33 +194,47 @@ export default function SymptomDecoder() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.1 }}
                     key={p.disease}
-                    className="p-5 rounded-2xl bg-white/5 border border-white/10 flex flex-col gap-3 relative overflow-hidden"
+                    className="p-5 rounded-2xl bg-slate-50 border border-slate-100 flex flex-col gap-3"
                   >
-                    <div className="flex items-center justify-between z-10">
-                      <h4 className="text-base font-bold text-white">{p.disease}</h4>
-                      <span className="text-sm font-bold bg-white/10 px-3 py-1 rounded-full text-slate-300 backdrop-blur-md">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-base font-bold text-slate-900">{p.disease}</h4>
+                      <span className={`text-sm font-bold px-3 py-1 rounded-full ${
+                        p.confidence > 70
+                          ? "bg-emerald-50 text-emerald-600"
+                          : p.confidence > 40
+                          ? "bg-amber-50 text-amber-600"
+                          : "bg-rose-50 text-rose-500"
+                      }`}>
                         {p.confidence}% match
                       </span>
                     </div>
-                    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden z-10">
-                      <div
-                        className={`h-full rounded-full transition-all duration-1000 ${p.confidence > 70 ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" : p.confidence > 40 ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]" : "bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.8)]"
-                          }`}
-                        style={{ width: `${p.confidence}%` }}
-                      ></div>
+                    <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${p.confidence}%` }}
+                        transition={{ duration: 0.8, delay: i * 0.1 }}
+                        className={`h-full rounded-full ${
+                          p.confidence > 70
+                            ? "bg-emerald-400"
+                            : p.confidence > 40
+                            ? "bg-amber-400"
+                            : "bg-rose-400"
+                        }`}
+                      />
                     </div>
                   </motion.div>
                 ))}
 
-                <div className="mt-auto pt-8">
-                  <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50 text-slate-400 text-xs font-medium leading-relaxed">
-                    <strong className="text-slate-300">Disclaimer:</strong> This tool is for informational purposes only and is not a substitute for professional medical advice, diagnosis, or treatment.
+                <div className="mt-auto pt-6">
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 text-slate-400 text-xs font-medium leading-relaxed">
+                    <strong className="text-slate-500">Disclaimer:</strong> This tool is for informational purposes only and is not a substitute for professional medical advice, diagnosis, or treatment.
                   </div>
                 </div>
               </div>
             )}
           </div>
         </div>
+
       </div>
     </div>
   );
