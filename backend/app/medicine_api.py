@@ -5,7 +5,7 @@ import base64
 import uuid
 import requests
 from datetime import datetime, date, timedelta, timezone as pytimezone
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional
@@ -23,6 +23,33 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 router = APIRouter()
 security = HTTPBearer()
 
+
+def get_tz(timezone_name: str):
+    import zoneinfo
+    try:
+        return zoneinfo.ZoneInfo(timezone_name)
+    except Exception:
+        import datetime
+        return datetime.timezone.utc
+
+def get_today_bounds_in_utc(timezone_name: str) -> tuple[str, str]:
+    tz = get_tz(timezone_name)
+    # Check if tz is tzinfo subclass or zoneinfo ZoneInfo
+    if hasattr(tz, "utcoffset"):
+        local_now = datetime.now(tz)
+    else:
+        local_now = datetime.now(pytimezone.utc)
+    
+    local_today = local_now.date()
+    
+    # Start and end of local today
+    local_start = datetime.combine(local_today, datetime.min.time(), tzinfo=tz if hasattr(tz, "utcoffset") else None)
+    local_end = datetime.combine(local_today, datetime.max.time(), tzinfo=tz if hasattr(tz, "utcoffset") else None)
+    
+    utc_start = local_start.astimezone(pytimezone.utc).isoformat().replace("+00:00", "Z")
+    utc_end = local_end.astimezone(pytimezone.utc).isoformat().replace("+00:00", "Z")
+    
+    return utc_start, utc_end
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
@@ -46,7 +73,7 @@ def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(secu
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Auth error: {e}")
+        print(f"[Error] Auth error: {e}")
         raise HTTPException(status_code=401, detail="Authentication failed.")
 
 
@@ -87,7 +114,7 @@ def get_valid_google_token(user_id: str) -> Optional[str]:
         now = datetime.now(expires_at.tzinfo)
         
         if expires_at <= now + timedelta(seconds=60):
-            print(f"🔄 Google Access Token expired for user {user_id[:8]}. Refreshing...")
+            print(f"[Google] Google Access Token expired for user {user_id[:8]}. Refreshing...")
             client_id = os.getenv("GOOGLE_CLIENT_ID")
             client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
             
@@ -112,11 +139,11 @@ def get_valid_google_token(user_id: str) -> Optional[str]:
                 
                 return new_access_token
             else:
-                print(f"❌ Failed to refresh Google Token: {resp.status_code} - {resp.text}")
+                print(f"[Error] Failed to refresh Google Token: {resp.status_code} - {resp.text}")
                 return None
         return access_token
     except Exception as e:
-        print(f"⚠️ Error get_valid_google_token: {e}")
+        print(f"[Warning] Error get_valid_google_token: {e}")
         return None
 
 
@@ -124,7 +151,7 @@ def sync_medicine_to_google_calendar(medicine: dict, timezone_name: str = "UTC")
     user_id = medicine["user_id"]
     access_token = get_valid_google_token(user_id)
     if not access_token:
-        print(f"ℹ️ Google Calendar not connected for user {user_id[:8]}, skipping sync.")
+        print(f"[Info] Google Calendar not connected for user {user_id[:8]}, skipping sync.")
         return []
         
     medicine_name = medicine["medicine_name"]
@@ -201,11 +228,11 @@ def sync_medicine_to_google_calendar(medicine: dict, timezone_name: str = "UTC")
             if resp.status_code in (200, 201):
                 event_data = resp.json()
                 event_ids.append(event_data["id"])
-                print(f"✅ Created calendar event: {event_data['id']} for {medicine_name} at {t}")
+                print(f"[Google] Created calendar event: {event_data['id']} for {medicine_name} at {t}")
             else:
-                print(f"⚠️ Failed to create Google Calendar event: {resp.status_code} - {resp.text}")
+                print(f"[Warning] Failed to create Google Calendar event: {resp.status_code} - {resp.text}")
         except Exception as ex:
-            print(f"❌ Error creating Google Calendar event: {ex}")
+            print(f"[Error] Error creating Google Calendar event: {ex}")
             
     return event_ids
 
@@ -216,8 +243,8 @@ def delete_google_calendar_events(user_id: str, event_ids: list[str]):
         
     access_token = get_valid_google_token(user_id)
     if not access_token:
-        print(f"ℹ️ Google Calendar not connected for user {user_id[:8]}, skipping event deletion.")
-        return
+        print(f"[Info] Google Calendar not connected for user {user_id[:8]}, skipping event deletion.")
+        return []
         
     headers = {
         "Authorization": f"Bearer {access_token}"
@@ -231,13 +258,13 @@ def delete_google_calendar_events(user_id: str, event_ids: list[str]):
                 timeout=10
             )
             if resp.status_code in (200, 204):
-                print(f"✅ Deleted Google Calendar event: {event_id}")
+                print(f"[Google] Deleted Google Calendar event: {event_id}")
             elif resp.status_code == 404:
-                print(f"ℹ️ Google Calendar event already deleted: {event_id}")
+                print(f"[Info] Google Calendar event already deleted: {event_id}")
             else:
-                print(f"⚠️ Failed to delete Google Calendar event {event_id}: {resp.status_code} - {resp.text}")
+                print(f"[Warning] Failed to delete Google Calendar event {event_id}: {resp.status_code} - {resp.text}")
         except Exception as ex:
-            print(f"❌ Error deleting Google Calendar event {event_id}: {ex}")
+            print(f"[Error] Error deleting Google Calendar event {event_id}: {ex}")
 
 
 # ── Google OAuth Endpoints ───────────────────────────────────────────────────
@@ -318,7 +345,7 @@ async def google_callback(body: GoogleCallbackBody, user_id: str = Depends(get_c
             
         return {"status": "connected"}
     except Exception as e:
-        print(f"❌ Google callback error: {e}")
+        print(f"[Error] Google callback error: {e}")
         if isinstance(e, HTTPException):
             raise
         raise HTTPException(status_code=500, detail=str(e))
@@ -331,7 +358,7 @@ async def get_google_status(user_id: str = Depends(get_current_user_id)):
         res = supabase.table("user_google_tokens").select("user_id").eq("user_id", user_id).execute()
         return {"connected": len(res.data) > 0}
     except Exception as e:
-        print(f"⚠️ get_google_status error: {e}")
+        print(f"[Warning] get_google_status error: {e}")
         return {"connected": False}
 
 
@@ -342,7 +369,7 @@ async def google_disconnect(user_id: str = Depends(get_current_user_id)):
         supabase.table("user_google_tokens").delete().eq("user_id", user_id).execute()
         return {"status": "disconnected"}
     except Exception as e:
-        print(f"❌ google_disconnect error: {e}")
+        print(f"[Error] google_disconnect error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -375,7 +402,7 @@ async def sync_all_medicines(timezone: str = "UTC", user_id: str = Depends(get_c
                     
         return {"status": "success", "synced_medicines_count": synced_count}
     except Exception as e:
-        print(f"❌ sync_all_medicines error: {e}")
+        print(f"[Error] sync_all_medicines error: {e}")
         if isinstance(e, HTTPException):
             raise
         raise HTTPException(status_code=500, detail=str(e))
@@ -383,7 +410,7 @@ async def sync_all_medicines(timezone: str = "UTC", user_id: str = Depends(get_c
 
 # ── Medicine CRUD Endpoints ───────────────────────────────────────────────────
 @router.get("/medicines")
-async def list_medicines(user_id: str = Depends(get_current_user_id)):
+async def list_medicines(timezone: str = Query(default="UTC"), user_id: str = Depends(get_current_user_id)):
     """Fetch all active medicines for this user."""
     try:
         result = (
@@ -394,9 +421,23 @@ async def list_medicines(user_id: str = Depends(get_current_user_id)):
             .order("created_at", desc=True)
             .execute()
         )
-        return {"medicines": result.data or []}
+        utc_start, utc_end = get_today_bounds_in_utc(timezone)
+        logs_res = (
+            supabase.table("medicine_logs")
+            .select("medicine_id, scheduled_time")
+            .eq("user_id", user_id)
+            .gte("taken_at", utc_start)
+            .lte("taken_at", utc_end)
+            .execute()
+        )
+        active_ids = {m["id"] for m in (result.data or [])}
+        filtered_logs = [log for log in (logs_res.data or []) if log["medicine_id"] in active_ids]
+        return {
+            "medicines": result.data or [],
+            "today_logs": filtered_logs
+        }
     except Exception as e:
-        print(f"❌ list_medicines error: {e}")
+        print(f"[Error] list_medicines error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -424,7 +465,7 @@ async def create_medicine(body: MedicineCreate, user_id: str = Depends(get_curre
         try:
             event_ids = sync_medicine_to_google_calendar(medicine_db, body.timezone or "UTC")
         except Exception as e:
-            print(f"⚠️ Failed to sync to Google Calendar: {e}")
+            print(f"[Warning] Failed to sync to Google Calendar: {e}")
             
         if event_ids:
             try:
@@ -433,11 +474,11 @@ async def create_medicine(body: MedicineCreate, user_id: str = Depends(get_curre
                 }).eq("id", medicine_db["id"]).execute()
                 medicine_db["google_event_ids"] = event_ids
             except Exception as e:
-                print(f"⚠️ Failed to update google_event_ids in DB: {e}")
+                print(f"[Warning] Failed to update google_event_ids in DB: {e}")
                 
         return {"medicine": medicine_db}
     except Exception as e:
-        print(f"❌ create_medicine error: {e}")
+        print(f"[Error] create_medicine error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -459,7 +500,7 @@ async def delete_medicine(medicine_id: str, user_id: str = Depends(get_current_u
                 try:
                     delete_google_calendar_events(user_id, event_ids)
                 except Exception as e:
-                    print(f"⚠️ Error deleting Google Calendar events: {e}")
+                    print(f"[Warning] Error deleting Google Calendar events: {e}")
                     
         supabase.table("medicines") \
             .update({"is_active": False}) \
@@ -468,7 +509,7 @@ async def delete_medicine(medicine_id: str, user_id: str = Depends(get_current_u
             .execute()
         return {"status": "deleted"}
     except Exception as e:
-        print(f"❌ delete_medicine error: {e}")
+        print(f"[Error] delete_medicine error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -476,10 +517,25 @@ async def delete_medicine(medicine_id: str, user_id: str = Depends(get_current_u
 async def take_medicine(
     medicine_id: str,
     body: MedicineTake,
+    timezone: str = Query(default="UTC"),
     user_id: str = Depends(get_current_user_id),
 ):
     """Log that a dose was taken."""
     try:
+        utc_start, utc_end = get_today_bounds_in_utc(timezone)
+        existing = (
+            supabase.table("medicine_logs")
+            .select("id")
+            .eq("medicine_id", medicine_id)
+            .eq("user_id", user_id)
+            .eq("scheduled_time", body.scheduled_time)
+            .gte("taken_at", utc_start)
+            .lte("taken_at", utc_end)
+            .execute()
+        )
+        if existing.data:
+            return {"status": "already_logged"}
+
         supabase.table("medicine_logs").insert({
             "medicine_id": medicine_id,
             "user_id": user_id,
@@ -487,12 +543,12 @@ async def take_medicine(
         }).execute()
         return {"status": "logged"}
     except Exception as e:
-        print(f"❌ take_medicine error: {e}")
+        print(f"[Error] take_medicine error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/medicines/stats")
-async def medicine_stats(user_id: str = Depends(get_current_user_id)):
+async def medicine_stats(timezone: str = Query(default="UTC"), user_id: str = Depends(get_current_user_id)):
     """Calculate adherence stats."""
     try:
         meds = (
@@ -505,30 +561,49 @@ async def medicine_stats(user_id: str = Depends(get_current_user_id)):
         active_meds = meds.data or []
         today_total = sum(len(m.get("times", [])) for m in active_meds)
 
-        today_str = date.today().isoformat()
+        utc_start, utc_end = get_today_bounds_in_utc(timezone)
         logs = (
             supabase.table("medicine_logs")
-            .select("id, taken_at")
+            .select("medicine_id, scheduled_time")
             .eq("user_id", user_id)
-            .gte("taken_at", f"{today_str}T00:00:00")
-            .lte("taken_at", f"{today_str}T23:59:59")
+            .gte("taken_at", utc_start)
+            .lte("taken_at", utc_end)
             .execute()
         )
-        today_taken = len(logs.data or [])
+        active_med_ids = {m["id"] for m in active_meds}
+        unique_taken = {
+            (log["medicine_id"], log["scheduled_time"]) 
+            for log in (logs.data or []) 
+            if log["medicine_id"] in active_med_ids
+        }
+        today_taken = len(unique_taken)
 
-        search_start = (date.today() - timedelta(days=365)).isoformat()
+        # Local tz definition
+        tz = get_tz(timezone)
+        if hasattr(tz, "utcoffset"):
+            local_today = datetime.now(tz).date()
+            local_start_date = local_today - timedelta(days=365)
+        else:
+            local_today = date.today()
+            local_start_date = local_today - timedelta(days=365)
+
+        # Retrieve all logs in range to calculate streak
         all_logs_res = (
             supabase.table("medicine_logs")
             .select("taken_at")
             .eq("user_id", user_id)
-            .gte("taken_at", f"{search_start}T00:00:00")
+            .gte("taken_at", f"{local_start_date.isoformat()}T00:00:00")
             .execute()
         )
         
-        logged_dates = {datetime.fromisoformat(log["taken_at"]).date() for log in (all_logs_res.data or [])}
+        logged_dates = set()
+        for log in (all_logs_res.data or []):
+            utc_dt = datetime.fromisoformat(log["taken_at"].replace("Z", "+00:00"))
+            local_dt = utc_dt.astimezone(tz if hasattr(tz, "utcoffset") else pytimezone.utc)
+            logged_dates.add(local_dt.date())
         
         streak = 0
-        check_date = date.today()
+        check_date = local_today
         
         if check_date not in logged_dates:
             check_date -= timedelta(days=1)
@@ -542,7 +617,8 @@ async def medicine_stats(user_id: str = Depends(get_current_user_id)):
             "today_taken": today_taken,
             "today_total": today_total,
             "adherence_percent": round((today_taken / today_total * 100) if today_total > 0 else 0),
+            "logged_dates": [d.isoformat() for d in logged_dates],
         }
     except Exception as e:
-        print(f"❌ medicine_stats error: {e}")
+        print(f"[Error] medicine_stats error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, Flame, Clock, Calendar, Check, Pill, Loader2 } from "lucide-react";
+import { Plus, Trash2, Flame, Clock, Calendar, Check, Pill, Loader2, AlertTriangle } from "lucide-react";
 import { supabase } from "../supabaseClient";
 
 const API_URL = import.meta.env.VITE_API_BASE_URL || "https://healthmate-api-2qu0.onrender.com";
@@ -42,6 +42,7 @@ export default function MedicineScheduler() {
 
   // Data state
   const [medicines, setMedicines] = useState<Medicine[]>([]);
+  const [todayLogs, setTodayLogs] = useState<{ medicine_id: string; scheduled_time: string }[]>([]);
   const [stats, setStats] = useState<Stats>({ streak: 0, today_taken: 0, today_total: 0, adherence_percent: 0 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -67,15 +68,17 @@ export default function MedicineScheduler() {
       const token = await getAuthToken();
       const headers = { Authorization: `Bearer ${token}` };
 
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const [medsRes, statsRes, googleStatusRes] = await Promise.all([
-        fetch(`${API_URL}/api/medicines`, { headers }),
-        fetch(`${API_URL}/api/medicines/stats`, { headers }),
+        fetch(`${API_URL}/api/medicines?timezone=${encodeURIComponent(tz)}`, { headers }),
+        fetch(`${API_URL}/api/medicines/stats?timezone=${encodeURIComponent(tz)}`, { headers }),
         fetch(`${API_URL}/api/google/status`, { headers }),
       ]);
 
       if (medsRes.ok) {
         const medsData = await medsRes.json();
         setMedicines(medsData.medicines || []);
+        setTodayLogs(medsData.today_logs || []);
       }
       if (statsRes.ok) {
         const statsData = await statsRes.json();
@@ -219,7 +222,8 @@ export default function MedicineScheduler() {
     setTakingId(key);
     try {
       const token = await getAuthToken();
-      await fetch(`${API_URL}/api/medicines/${medicine.id}/take`, {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      await fetch(`${API_URL}/api/medicines/${medicine.id}/take?timezone=${encodeURIComponent(tz)}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -345,6 +349,17 @@ export default function MedicineScheduler() {
           </div>
         </div>
 
+        {/* Google OAuth Help Banner when not connected */}
+        {!googleConnected && (
+          <div className="bg-amber-50/80 border border-amber-100 rounded-2xl p-4 mb-6 flex gap-3 text-left">
+            <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={18} />
+            <div className="text-xs text-amber-800">
+              <span className="font-bold block mb-1">Google OAuth Info for Reviewers</span>
+              The automated background calendar sync is running in Google "Testing" mode. If you see an "Access Blocked: Error 403" page, please register your Gmail address in the Google Cloud Console or simply use the **manual "Add to Google Calendar" links** under each saved medicine dose below. They bypass the OAuth check entirely!
+            </div>
+          </div>
+        )}
+
         {/* Stats Bar */}
         {!loading && stats.today_total > 0 && (
           <motion.div
@@ -395,21 +410,29 @@ export default function MedicineScheduler() {
                         
                         {/* Interactive Dose Tracking */}
                         <div className="flex gap-1.5 flex-wrap mt-2">
-                          {med.times.map((t, i) => (
-                            <button
-                              key={i}
-                              onClick={() => handleTake(med, t)}
-                              disabled={takingId === `${med.id}-${t}`}
-                              className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg text-emerald-700 font-bold text-xs hover:bg-emerald-100 transition-colors disabled:opacity-50"
-                            >
-                              {takingId === `${med.id}-${t}` ? (
-                                <Loader2 size={12} className="animate-spin" />
-                              ) : (
-                                <Check size={12} />
-                              )}
-                              {formatTime(t)}
-                            </button>
-                          ))}
+                          {med.times.map((t, i) => {
+                            const isTaken = todayLogs.some(l => l.medicine_id === med.id && l.scheduled_time === t);
+                            const isTaking = takingId === `${med.id}-${t}`;
+                            return (
+                              <button
+                                key={i}
+                                onClick={() => handleTake(med, t)}
+                                disabled={isTaking || isTaken}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs transition-colors border ${
+                                  isTaken
+                                    ? "bg-emerald-100 border-emerald-300 text-emerald-800 line-through opacity-85 cursor-default"
+                                    : "bg-white hover:bg-rose-50 border-slate-200 hover:border-rose-200 text-slate-700 hover:text-rose-600"
+                                } disabled:opacity-75`}
+                              >
+                                {isTaking ? (
+                                  <Loader2 size={12} className="animate-spin" />
+                                ) : (
+                                  <Check size={12} className={isTaken ? "text-emerald-600 animate-bounce" : "text-slate-400"} />
+                                )}
+                                <span>{formatTime(t)}</span>
+                              </button>
+                            );
+                          })}
                         </div>
 
                         {/* Direct Google Calendar Links Fallback */}

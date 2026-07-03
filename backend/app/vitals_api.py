@@ -48,11 +48,11 @@ def get_current_user_api_key(authorization: str = Header(None)) -> dict:
         expected_key = os.getenv("DEVICE_API_KEY", "")
         
         if not expected_key:
-            print("⚠️ DEVICE_API_KEY not set in environment")
+            print("[Warning] DEVICE_API_KEY not set in environment")
             raise HTTPException(status_code=500, detail="Backend not configured")
         
         if api_key != expected_key:
-            print(f"❌ Invalid API key: {api_key[:15]}...")
+            print(f"[Warning] Invalid API key: {api_key[:15]}...")
             raise HTTPException(status_code=401, detail="Invalid API key")
         
         hardware_user_id = os.getenv("HARDWARE_USER_ID", "550e8400-e29b-41d4-a716-446655440000")
@@ -61,7 +61,7 @@ def get_current_user_api_key(authorization: str = Header(None)) -> dict:
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Auth error: {e}")
+        print(f"[Error] Auth error: {e}")
         raise HTTPException(status_code=401, detail="Authentication failed")
 
 
@@ -87,7 +87,7 @@ def get_frontend_user(authorization: str = Header(None)) -> dict:
             
         return {"id": user_id}
     except Exception as e:
-        print(f"⚠️ get_frontend_user: Using fallback due to {e}")
+        print(f"[Warning] get_frontend_user: Using fallback due to {e}")
         return {"id": os.getenv("HARDWARE_USER_ID", "550e8400-e29b-41d4-a716-446655440000")}
 
 # ============================================================================
@@ -139,7 +139,12 @@ def calculate_risk(hr, spo2, temp, report_risk, symptom_score_raw) -> dict:
         elif temp < 35.0:
             temp_pts = 20
 
-    report_pts = 15 if (report_risk and report_risk > 0.60) else 0
+    report_pts = 0
+    if report_risk:
+        if report_risk > 0.60:
+            report_pts = 15
+        elif report_risk > 0.30:
+            report_pts = 5
     symptom_pts = min(30, int(symptom_score_raw / 2.5)) if symptom_score_raw else 0
 
     total_raw = spo2_pts + hr_pts + temp_pts + report_pts + symptom_pts
@@ -192,7 +197,7 @@ def fetch_latest_report_risk(user_id: str):
         
         return max_risk if max_risk > 0 else None
     except Exception as e:
-        print(f"⚠️ fetch_latest_report_risk: {e}")
+        print(f"[Warning] fetch_latest_report_risk: {e}")
         return None
 
 def fetch_previous_status(user_id: str):
@@ -210,7 +215,7 @@ def fetch_previous_status(user_id: str):
             return result.data[0]["status"]
         return None
     except Exception as e:
-        print(f"⚠️ fetch_previous_status: {e}")
+        print(f"[Warning] fetch_previous_status: {e}")
         return None
 
 def fetch_user_profile(user_id: str) -> dict:
@@ -242,7 +247,7 @@ def fetch_latest_symptom_score(user_id: str) -> int:
             return result.data[0]["score"]
         return 0
     except Exception as e:
-        print(f"⚠️ fetch_latest_symptom_score: {e}")
+        print(f"[Warning] fetch_latest_symptom_score: {e}")
         return 0
 
 # ============================================================================
@@ -252,7 +257,7 @@ def fetch_latest_symptom_score(user_id: str) -> int:
 def send_alert_email(to_emails: list, subject: str, body: str) -> bool:
     """Send email via SendGrid"""
     if not SENDGRID_API_KEY:
-        print("⚠️ SENDGRID_API_KEY not set — email skipped")
+        print("[Warning] SENDGRID_API_KEY not set — email skipped")
         return False
     
     try:
@@ -272,12 +277,13 @@ def send_alert_email(to_emails: list, subject: str, body: str) -> bool:
             timeout=10,
         )
         if resp.status_code in (200, 202):
-            print(f"✅ Email sent to {to_emails}")
+            print(f"[Success] Email sent to {to_emails}")
             return True
-        print(f"⚠️ SendGrid {resp.status_code}")
+        print(f"[Warning] SendGrid {resp.status_code} - {resp.text}")
+        print(f"[Local Fallback] Email content that was blocked:\nSubject: {subject}\nBody: {body}")
         return False
     except Exception as e:
-        print(f"❌ Email error: {e}")
+        print(f"[Error] Email error: {e}")
         return False
 
 # ============================================================================
@@ -314,21 +320,21 @@ def maybe_send_critical_alert(user_id, score, status, previous_status, breakdown
         }).execute()
         if row.data:
             alert_id = row.data[0].get("id")
-            print(f"🔔 Alert created: {alert_id}")
+            print(f"[Vitals] Alert created: {alert_id}")
     except Exception as e:
-        print(f"⚠️ Alert row failed: {e}")
+        print(f"[Warning] Alert row failed: {e}")
 
     # Email only on state change
     if previous_status == "Critical":
-        print("ℹ️ Already Critical — email suppressed")
+        print("[Info] Already Critical — email suppressed")
         return False, alert_id
 
     to_emails = [e for e in [patient_email, caregiver_email] if e]
     if not to_emails:
-        print("⚠️ No email addresses")
+        print("[Warning] No email addresses")
         return False, alert_id
 
-    subject = f"🚨 HealthMate AI — Critical Alert for {full_name}"
+    subject = f"[Alert] HealthMate AI — Critical Alert for {full_name}"
     body = (
         f"Critical health alert!\n\n"
         f"Risk Score: {score}/100\n"
@@ -353,7 +359,7 @@ async def post_vitals(body: VitalsIn, user: dict = Depends(get_current_user_api_
     """POST /api3/vitals - Receive vitals from ESP32"""
     
     user_id = user["id"]
-    print(f"📡 Vitals: HR={body.heart_rate} SpO2={body.spo2} Temp={body.temperature}")
+    print(f"[Vitals] HR={body.heart_rate} SpO2={body.spo2} Temp={body.temperature}")
 
     # Save vitals
     try:
@@ -367,12 +373,12 @@ async def post_vitals(body: VitalsIn, user: dict = Depends(get_current_user_api_
             "activity": body.activity,
             "recorded_at": datetime.now(timezone.utc).isoformat(),
         }).execute()
-        print("✅ Vitals saved (Complete)")
+        print("[Vitals] Vitals saved (Complete)")
     except Exception as e:
         error_msg = str(e).lower()
         # Fallback if ANY motion columns are missing
         if "column" in error_msg and ("steps" in error_msg or "activity" in error_msg):
-            print("⚠️ DB missing motion columns. Saving basic vitals (Pulse/Temp/SpO2) only.")
+            print("[Warning] DB missing motion columns. Saving basic vitals (Pulse/Temp/SpO2) only.")
             try:
                 supabase.table("vitals").insert({
                     "user_id": user_id,
@@ -381,12 +387,12 @@ async def post_vitals(body: VitalsIn, user: dict = Depends(get_current_user_api_
                     "temperature": body.temperature,
                     "recorded_at": datetime.now(timezone.utc).isoformat(),
                 }).execute()
-                print("✅ Basic Vitals saved successfully")
+                print("[Vitals] Basic Vitals saved successfully")
             except Exception as e2:
-                print(f"❌ Basic save failed: {e2}")
+                print(f"[Error] Basic save failed: {e2}")
                 raise HTTPException(status_code=500, detail="Database error")
         else:
-            print(f"❌ Save failed: {e}")
+            print(f"[Error] Save failed: {e}")
             raise HTTPException(status_code=500, detail="Failed to save")
 
     # Get latest data for unified risk index
@@ -405,14 +411,14 @@ async def post_vitals(body: VitalsIn, user: dict = Depends(get_current_user_api_
     score = risk["score"]
     status = risk["status"]
     breakdown = risk["breakdown"]
-    print(f"📊 Risk: {score}/100 → {status}")
+    print(f"[Vitals] Risk: {score}/100 -> {status}")
 
     # Get previous status
     previous_status = fetch_previous_status(user_id)
 
     # SPECIAL: Fall Detection Alert
     if body.fall_detected:
-        print("🚨 FALL DETECTED! Sending emergency alert...")
+        print("[Alert] FALL DETECTED! Sending emergency alert...")
         maybe_send_critical_alert(
             user_id, 100, "Critical", "Stable", 
             {"fall": "IMMEDIATE ACTION REQUIRED"}, 
@@ -428,7 +434,7 @@ async def post_vitals(body: VitalsIn, user: dict = Depends(get_current_user_api_
             "breakdown": breakdown,
         }).execute()
     except Exception as e:
-        print(f"⚠️ Risk save failed: {e}")
+        print(f"[Warning] Risk save failed: {e}")
 
     # Alert logic
     vitals_dict = {
@@ -447,6 +453,7 @@ async def post_vitals(body: VitalsIn, user: dict = Depends(get_current_user_api_
         "alert_sent": email_sent,
         "alert_id": alert_id,
     }
+
 
 @router.get("/vitals/latest")
 async def get_latest_vitals(user: dict = Depends(get_frontend_user)):
@@ -476,41 +483,33 @@ async def get_latest_vitals(user: dict = Depends(get_frontend_user)):
                 .execute()
             )
         
-        # 2. If data exists, return it
+        # 2. If data exists and is fresh (within 60 seconds), return it
         if result and result.data:
             row = result.data[0]
             recorded_dt = datetime.fromisoformat(row["recorded_at"].replace("Z", "+00:00"))
             age_seconds = int((datetime.now(timezone.utc) - recorded_dt).total_seconds())
 
-            return {
-                "id": row["id"],
-                "heart_rate": row["heart_rate"],
-                "spo2": row["spo2"],
-                "temperature": row["temperature"],
-                "steps": row.get("steps", 0),
-                "activity": row.get("activity", "stable"),
-                "recorded_at": row["recorded_at"],
-                "age_seconds": age_seconds,
-                "is_stale": age_seconds > 15,
-                "is_demo": False
-            }
+            if age_seconds <= 60:
+                return {
+                    "id": row["id"],
+                    "heart_rate": row["heart_rate"],
+                    "spo2": row["spo2"],
+                    "temperature": row["temperature"],
+                    "steps": row.get("steps", 0),
+                    "activity": row.get("activity", "stable"),
+                    "recorded_at": row["recorded_at"],
+                    "age_seconds": age_seconds,
+                    "is_stale": False,
+                    "is_demo": False
+                }
 
         # 3. DEMO MODE: If DB is empty, return high-quality fluctuating fake values
-        print(f"ℹ️ User {user_id[:8]} has no vitals. Returning Smart Demo data.")
-        
-        # Use a stable seed based on user_id so it doesn't fluctuate
-        import hashlib
-        seed_val = int(hashlib.md5(user_id.encode('utf-8')).hexdigest()[:8], 16)
-        
-        state = random.getstate()
-        random.seed(seed_val)
+        print(f"[Info] User {user_id[:8]} has no vitals. Returning Smart Demo data.")
         
         hr_jitter = random.uniform(-1.5, 1.5)
         spo2_jitter = random.uniform(-0.5, 0.5)
         temp_jitter = random.uniform(-0.1, 0.1)
-        steps_val = 1042 + (seed_val % 100)
-        
-        random.setstate(state)
+        steps_val = 1042
         
         return {
             "id": "demo-mode",
@@ -526,7 +525,7 @@ async def get_latest_vitals(user: dict = Depends(get_frontend_user)):
         }
 
     except Exception as e:
-        print(f"❌ Error in get_latest_vitals: {e}")
+        print(f"[Error] Error in get_latest_vitals: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/vitals/history")
@@ -551,7 +550,7 @@ async def get_vitals_history(
         
         # If no real data, generate a synthetic history trend for the graphs
         if not result.data:
-            print(f"ℹ️ Generating synthetic history for {user_id[:8]}")
+            print(f"[Info] Generating synthetic history for {user_id[:8]}")
             
             # Use a stable seed based on user_id so it doesn't fluctuate
             import hashlib
@@ -601,46 +600,42 @@ async def get_vitals_history(
             "is_demo": False
         }
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"[Error] Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/risk-score")
 async def get_risk_score(
-    symptom_score: Optional[float] = Query(default=0, ge=0, le=100),
+    symptom_score: Optional[float] = Query(default=None, ge=0, le=100),
     hr:   Optional[float] = Query(default=None),
     spo2: Optional[float] = Query(default=None),
     temp: Optional[float] = Query(default=None),
     user: dict = Depends(get_frontend_user),
 ):
-    """GET /api3/risk-score — accepts optional vitals overrides so the
-    frontend can pin risk calculation to the same reading it displays."""
-    
+    """GET /api3/risk-score — unified overall risk calculation"""
     user_id = user["id"]
 
-    # If the frontend passed explicit vitals, use those directly (no DB read needed)
-    if hr is not None and spo2 is not None and temp is not None:
-        latest_vitals = {"heart_rate": hr, "spo2": spo2, "temperature": temp}
-        report_risk = fetch_latest_report_risk(user_id)
-        current_symptom_score = symptom_score or fetch_latest_symptom_score(user_id)
-        risk = calculate_risk(hr, spo2, temp, report_risk, current_symptom_score)
-        return {
-            **risk,
-            "report_available": report_risk is not None,
-            "latest_vitals": latest_vitals,
-            "is_demo": False
-        }
-
+    # 1. Determine if using live hardware or simulated vitals
     vitals_result = (
         supabase.table("vitals")
-        .select("heart_rate, spo2, temperature")
+        .select("heart_rate, spo2, temperature, recorded_at")
         .eq("user_id", user_id)
         .order("recorded_at", desc=True)
         .limit(1)
         .execute()
     )
     
-    # If DB is empty, use the same base simulated values we use in get_latest_vitals
-    if not vitals_result.data:
+    is_demo = True
+    latest_vitals = None
+    if vitals_result.data:
+        row = vitals_result.data[0]
+        recorded_dt = datetime.fromisoformat(row["recorded_at"].replace("Z", "+00:00"))
+        age_seconds = (datetime.now(timezone.utc) - recorded_dt).total_seconds()
+        if age_seconds <= 60:
+            is_demo = False
+            latest_vitals = row
+
+    if is_demo:
+        # Simulate baseline vitals
         hr_demo = 72.0 + random.uniform(-1.5, 1.5)
         spo2_demo = 98.5 + random.uniform(-0.5, 0.5)
         temp_demo = 36.6 + random.uniform(-0.1, 0.1)
@@ -649,52 +644,36 @@ async def get_risk_score(
             "spo2": round(spo2_demo, 1),
             "temperature": round(temp_demo, 1)
         }
-        # Synthetic breakdown for a high "Safety Score" (target ~94-98)
-        hr_var = random.randint(-1, 1)
-        spo2_var = random.randint(-1, 1)
-        
-        demo_breakdown = {
-            "Heart Stability": 98 + hr_var,
-            "Oxygen Level": 99 + spo2_var,
-            "Temperature": 100,
-            "Consistency": 97
-        }
-        demo_score = 96 + hr_var + spo2_var
-        
-        return {
-            "score": demo_score,
-            "status": "Stable",
-            "breakdown": demo_breakdown,
-            "report_available": False,
-            "latest_vitals": latest_vitals,
-            "is_demo": True
-        }
-    else:
-        latest_vitals = vitals_result.data[0]
-        report_risk = fetch_latest_report_risk(user_id)
-        current_symptom_score = symptom_score or fetch_latest_symptom_score(user_id)
-        
-        risk = calculate_risk(
-            latest_vitals["heart_rate"],
-            latest_vitals["spo2"],
-            latest_vitals["temperature"],
-            report_risk,
-            current_symptom_score
-        )
 
-        return {
-            **risk,
-            "report_available": report_risk is not None,
-            "latest_vitals": latest_vitals,
-            "is_demo": False
-        }
+    # 2. Apply explicit frontend query overrides if passed
+    current_hr = hr if hr is not None else latest_vitals["heart_rate"]
+    current_spo2 = spo2 if spo2 is not None else latest_vitals["spo2"]
+    current_temp = temp if temp is not None else latest_vitals["temperature"]
+
+    # 3. Load other risk variables
+    report_risk = fetch_latest_report_risk(user_id)
+    current_symptom_score = symptom_score if symptom_score is not None else fetch_latest_symptom_score(user_id)
+
+    # 4. Calculate Unified Risk Score
+    risk = calculate_risk(current_hr, current_spo2, current_temp, report_risk, current_symptom_score)
+
+    return {
+        **risk,
+        "report_available": report_risk is not None,
+        "latest_vitals": {
+            "heart_rate": current_hr,
+            "spo2": current_spo2,
+            "temperature": current_temp
+        },
+        "is_demo": is_demo
+    }
 
 @router.post("/sos")
 async def trigger_sos(user: dict = Depends(get_frontend_user)):
     """POST /api3/sos - Emergency SOS"""
     
     user_id = user["id"]
-    print(f"🆘 SOS triggered")
+    print(f"[Vitals] SOS triggered")
 
     vitals_result = (
         supabase.table("vitals")
@@ -727,7 +706,7 @@ async def trigger_sos(user: dict = Depends(get_frontend_user)):
         }).execute()
         alert_id = row.data[0].get("id") if row.data else None
     except Exception as e:
-        print(f"⚠️ SOS alert failed: {e}")
+        print(f"[Warning] SOS alert failed: {e}")
         alert_id = None
 
     to_emails = [e for e in [patient_email, caregiver_email] if e]

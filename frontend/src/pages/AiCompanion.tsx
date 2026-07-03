@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Bot, User, AlertCircle, Sparkles } from "lucide-react";
 import { supabase } from "../supabaseClient";
@@ -75,6 +76,15 @@ export default function AiCompanion() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state?.prefilledMessage) {
+      setInput(location.state.prefilledMessage);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });

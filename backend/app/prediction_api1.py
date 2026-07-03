@@ -179,10 +179,10 @@ def run_prediction_for_all_models(normalized_data: dict) -> dict:
             model  = joblib.load(os.path.join(MODEL_DIR, f"{disease_name}_model_calibrated.pkl"))
             scaler = joblib.load(os.path.join(MODEL_DIR, f"{disease_name}_scaler.pkl"))
         except FileNotFoundError:
-            print(f"⚠ Missing model files for: {disease_name}")
+            print(f"[Warning] Missing model files for: {disease_name}")
             continue
         except Exception as e:
-            print(f"⚠ Error loading {disease_name}: {e}")
+            print(f"[Error] Error loading {disease_name}: {e}")
             continue
 
         required = meta["features"]
@@ -233,13 +233,13 @@ def run_prediction_for_all_models(normalized_data: dict) -> dict:
 
 # ── Main Pipeline Function (called by main.py) ────────────────────────────────
 def process_report_data(raw_json_data: dict) -> dict:
-    print("\n🔄 Normalizing raw OCR data...")
+    print("\n[Pipeline] Normalizing raw OCR data...")
     normalized = normalize_input_data(raw_json_data)
-    print("📦 Normalized features:", json.dumps(normalized, indent=2))
+    print("[Pipeline] Normalized features:", json.dumps(normalized, indent=2))
 
-    print("\n🤖 Running prediction models...")
+    print("\n[Pipeline] Running prediction models...")
     predictions = run_prediction_for_all_models(normalized)
-    print("📊 Results:", json.dumps(
+    print("[Pipeline] Results:", json.dumps(
         {k: v.get("risk_percent", v.get("reason", "?")) for k, v in predictions.items()},
         indent=2
     ))
@@ -266,7 +266,7 @@ async def predict_risk(body: PredictRequest):
         predictions = process_report_data(body.features)
         return {"predictions": predictions}
     except Exception as e:
-        print("❌ predict-risk error:", e)
+        print("[Error] predict-risk error:", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -323,10 +323,10 @@ Return ONLY this exact JSON (no markdown, no extra text):
     # 1. Try direct Google AI Studio Gemini API first if key exists
     gemini_key = os.getenv("GEMINI_API_KEY")
     if gemini_key:
-        print("🔍 Explain: trying direct Google AI Studio Gemini API first...")
+        print("[Explain] trying direct Google AI Studio Gemini API first...")
         for gemini_model in ["gemini-2.5-flash-lite", "gemini-3.1-flash-lite"]:
             try:
-                print(f"🔄 Trying direct Gemini model: {gemini_model}...")
+                print(f"[Explain] Trying direct Gemini model: {gemini_model}...")
                 payload = {
                     "contents": [
                         {
@@ -342,7 +342,7 @@ Return ONLY this exact JSON (no markdown, no extra text):
                 if response.status_code == 200:
                     result = response.json()
                     content = result["candidates"][0]["content"]["parts"][0]["text"].strip()
-                    print(f"✅ Explanation generated directly by Gemini model {gemini_model}")
+                    print(f"[Explain] Explanation generated directly by Gemini model {gemini_model}")
                     if content.startswith("```"):
                         parts = content.split("```")
                         content = parts[1] if len(parts) > 1 else parts[0]
@@ -355,15 +355,15 @@ Return ONLY this exact JSON (no markdown, no extra text):
                         "precautions": parsed.get("precautions", []),
                     }
                 else:
-                    print(f"⚠️ Direct Gemini model {gemini_model} failed: {response.status_code} - {response.text}")
+                    print(f"[Warning] Direct Gemini model {gemini_model} failed: {response.status_code} - {response.text}")
             except json.JSONDecodeError:
-                print(f"⚠️ Direct Gemini model {gemini_model} returned non-JSON, using raw text fallback")
+                print(f"[Warning] Direct Gemini model {gemini_model} returned non-JSON, using raw text fallback")
                 return {
                     "explanation": content[:500] if 'content' in locals() else "Unable to generate explanation.",
                     "precautions": [],
                 }
             except Exception as e:
-                print(f"⚠️ Direct Gemini model {gemini_model} error: {e}")
+                print(f"[Warning] Direct Gemini model {gemini_model} error: {e}")
 
     # Free text models — no vision needed, much less rate limited
     TEXT_MODELS = [
@@ -377,7 +377,7 @@ Return ONLY this exact JSON (no markdown, no extra text):
     last_error = None
     for model in TEXT_MODELS:
         try:
-            print(f"🤖 Explain: trying {model}...")
+            print(f"[Explain] trying {model}...")
             async with httpx.AsyncClient(timeout=30) as client:
                 response = await client.post(
                     "https://openrouter.ai/api/v1/chat/completions",
@@ -396,7 +396,7 @@ Return ONLY this exact JSON (no markdown, no extra text):
 
             if response.status_code != 200:
                 err = response.json().get("error", {})
-                print(f"⚠️ {model} failed: {err.get('message','')[:80]}")
+                print(f"[Warning] {model} failed: {err.get('message','')[:80]}")
                 last_error = str(err)
                 continue
 
@@ -411,7 +411,7 @@ Return ONLY this exact JSON (no markdown, no extra text):
                 content = content.strip()
 
             parsed = json.loads(content)
-            print(f"✅ Explanation generated by {model}")
+            print(f"[Explain] Explanation generated by {model}")
             return {
                 "explanation": parsed.get("explanation", ""),
                 "precautions": parsed.get("precautions", []),
@@ -419,13 +419,13 @@ Return ONLY this exact JSON (no markdown, no extra text):
 
         except json.JSONDecodeError:
             # Model returned text not JSON — extract what we can
-            print(f"⚠️ {model} returned non-JSON, using raw text")
+            print(f"[Warning] {model} returned non-JSON, using raw text")
             return {
                 "explanation": content[:500] if 'content' in dir() else "Unable to generate explanation.",
                 "precautions": [],
             }
         except Exception as e:
-            print(f"❌ Error with {model}: {e}")
+            print(f"[Error] Error with {model}: {e}")
             last_error = str(e)
             continue
 
@@ -469,10 +469,10 @@ Return ONLY the summary text, do not wrap in markdown or JSON."""
     # 1. Try direct Google AI Studio Gemini API first if key exists
     gemini_key = os.getenv("GEMINI_API_KEY")
     if gemini_key:
-        print("🔍 Summary: trying direct Google AI Studio Gemini API first...")
+        print("[Summary] trying direct Google AI Studio Gemini API first...")
         for gemini_model in ["gemini-2.5-flash-lite", "gemini-3.1-flash-lite"]:
             try:
-                print(f"🔄 Trying direct Gemini model: {gemini_model}...")
+                print(f"[Summary] trying direct Gemini model: {gemini_model}...")
                 payload = {
                     "contents": [
                         {
@@ -488,12 +488,12 @@ Return ONLY the summary text, do not wrap in markdown or JSON."""
                 if response.status_code == 200:
                     result = response.json()
                     content = result["candidates"][0]["content"]["parts"][0]["text"].strip()
-                    print(f"✅ Summary generated directly by Gemini model {gemini_model}")
+                    print(f"[Summary] Summary generated directly by Gemini model {gemini_model}")
                     return {"summary": content}
                 else:
-                    print(f"⚠️ Direct Gemini model {gemini_model} failed: {response.status_code} - {response.text}")
+                    print(f"[Warning] Direct Gemini model {gemini_model} failed: {response.status_code} - {response.text}")
             except Exception as e:
-                print(f"⚠️ Direct Gemini model {gemini_model} error: {e}")
+                print(f"[Warning] Direct Gemini model {gemini_model} error: {e}")
 
     # 2. Fall back to OpenRouter free models
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
@@ -509,7 +509,7 @@ Return ONLY the summary text, do not wrap in markdown or JSON."""
     last_error = ""
     for model in TEXT_MODELS:
         try:
-            print(f"🤖 Summary: trying OpenRouter {model}...")
+            print(f"[Summary] trying OpenRouter {model}...")
             async with httpx.AsyncClient(timeout=30) as client:
                 response = await client.post(
                     "https://openrouter.ai/api/v1/chat/completions",
@@ -528,16 +528,16 @@ Return ONLY the summary text, do not wrap in markdown or JSON."""
 
             if response.status_code != 200:
                 err = response.json().get("error", {})
-                print(f"⚠️ {model} failed: {err.get('message','')[:80]}")
+                print(f"[Warning] {model} failed: {err.get('message','')[:80]}")
                 last_error = str(err)
                 continue
 
             content = response.json()["choices"][0]["message"]["content"].strip()
-            print(f"✅ Summary generated by OpenRouter {model}")
+            print(f"[Summary] Summary generated by OpenRouter {model}")
             return {"summary": content}
 
         except Exception as e:
-            print(f"❌ Error with OpenRouter {model}: {e}")
+            print(f"[Error] Error with OpenRouter {model}: {e}")
             last_error = str(e)
             continue
 

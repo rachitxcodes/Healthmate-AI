@@ -57,28 +57,101 @@ function flattenExtractedData(data: Record<string, any>): Record<string, string 
   return flat;
 }
 
+const REFERENCE_RANGES: Record<string, { min: number; max: number; unit: string }> = {
+  Total_Bilirubin: { min: 0.2, max: 1.2, unit: "mg/dL" },
+  Direct_Bilirubin: { min: 0.0, max: 0.3, unit: "mg/dL" },
+  Alkaline_Phosphotase: { min: 35, max: 104, unit: "U/L" },
+  Alamine_Aminotransferase: { min: 7, max: 56, unit: "U/L" },
+  Aspartate_Aminotransferase: { min: 10, max: 40, unit: "U/L" },
+  Total_Protiens: { min: 6.4, max: 8.3, unit: "g/dL" },
+  Albumin: { min: 3.5, max: 5.0, unit: "g/dL" },
+  Albumin_and_Globulin_Ratio: { min: 1.1, max: 2.0, unit: "ratio" },
+  Creatinine: { min: 0.6, max: 1.2, unit: "mg/dL" },
+  Blood_Urea_Nitrogen: { min: 6, max: 20, unit: "mg/dL" },
+  Glucose: { min: 70, max: 100, unit: "mg/dL" },
+  Cholesterol: { min: 120, max: 200, unit: "mg/dL" },
+  Age: { min: 1, max: 100, unit: "years" },
+};
+
 const DataSlider = ({ label, value }: { label: string, value: string | number }) => {
-  const num = parseFloat(String(value));
-  let pos = 50;
-  if (!isNaN(num)) {
-    pos = 30 + (num % 40);
-  }
-  return (
-    <div className="flex items-center justify-between mb-4 w-full gap-4">
-      <div className="w-[40%]">
-        <span className="text-sm font-bold text-slate-500 leading-tight line-clamp-2" title={label}>{label.replace(/_/g, ' ')}</span>
+  const cleanLabel = label.trim();
+  const range = REFERENCE_RANGES[cleanLabel];
+  
+  // Extract decimal number (e.g. "0.41 High mg/dL" -> 0.41)
+  const numVal = parseFloat(String(value).replace(/[^\d.-]/g, ""));
+  
+  let labelText = label.replace(/_/g, ' ');
+  
+  if (isNaN(numVal) || !range) {
+    return (
+      <div className="flex items-center justify-between py-3 px-4 rounded-xl bg-slate-50 border border-slate-100/80 mb-2 w-full gap-4">
+        <span className="text-xs font-bold text-slate-500 capitalize">{labelText}</span>
+        <span className="font-mono text-xs font-bold text-slate-800">{value}</span>
       </div>
-      <div className="w-[40%] relative h-3 bg-slate-100 shadow-inner rounded-full flex items-center border border-slate-200/50">
-        <div className="absolute left-[30%] right-[30%] h-full bg-rose-400/20 rounded-full"></div>
+    );
+  }
+
+  const { min, max, unit } = range;
+  
+  // Map value to slider percent position (10% to 90%)
+  let pos = 50;
+  if (numVal < min) {
+    const minLimit = min * 0.5;
+    const ratio = minLimit === min ? 0.5 : (numVal - minLimit) / (min - minLimit);
+    pos = Math.max(10, ratio * 30);
+  } else if (numVal > max) {
+    const maxLimit = max * 1.5;
+    const ratio = maxLimit === max ? 0.5 : (numVal - max) / (maxLimit - max);
+    pos = Math.min(90, 70 + ratio * 20);
+  } else {
+    const ratio = max === min ? 0.5 : (numVal - min) / (max - min);
+    pos = 30 + ratio * 40;
+  }
+
+  const isLow = numVal < min;
+  const isHigh = numVal > max;
+
+  let statusText = "Normal";
+  let badgeColor = "bg-emerald-50 text-emerald-600 border-emerald-100";
+  let thumbColor = "border-emerald-500 bg-white shadow-[0_2px_8px_rgba(16,185,129,0.3)]";
+  let trackColor = "bg-emerald-500/20";
+
+  if (isHigh) {
+    statusText = "High";
+    badgeColor = "bg-rose-50 text-rose-600 border-rose-100";
+    thumbColor = "border-rose-500 bg-white shadow-[0_2px_8px_rgba(244,63,94,0.3)]";
+    trackColor = "bg-rose-500/20";
+  } else if (isLow) {
+    statusText = "Low";
+    badgeColor = "bg-amber-50 text-amber-600 border-amber-100";
+    thumbColor = "border-amber-500 bg-white shadow-[0_2px_8px_rgba(245,158,11,0.3)]";
+    trackColor = "bg-amber-500/20";
+  }
+
+  return (
+    <div className="flex flex-col mb-4 w-full p-4 rounded-xl bg-slate-50/50 border border-slate-100 hover:bg-slate-50 transition-colors">
+      <div className="flex justify-between items-start mb-2">
+        <div className="flex flex-col">
+          <span className="text-[12px] font-black text-slate-700 tracking-tight capitalize">{labelText}</span>
+          <span className="text-[9px] text-slate-400 font-bold mt-0.5">Ref: {min} - {max} {unit}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className={`text-[8px] uppercase tracking-widest font-black px-1.5 py-0.5 rounded border ${badgeColor}`}>
+            {statusText}
+          </span>
+          <span className="font-mono text-xs font-black text-slate-800">
+            {numVal} <span className="text-[9px] text-slate-400 font-bold">{unit}</span>
+          </span>
+        </div>
+      </div>
+      <div className="relative h-1.5 bg-slate-200/60 shadow-inner rounded-full flex items-center overflow-visible mt-1">
+        <div className={`absolute left-[30%] right-[30%] h-full ${trackColor} rounded-full`}></div>
         <motion.div
           initial={{ left: "0%" }}
           animate={{ left: `${pos}%` }}
           transition={{ type: "spring", stiffness: 100, damping: 20 }}
-          className="absolute w-5 h-5 bg-white border-[2.5px] border-rose-500 rounded-full shadow-[0_2px_8px_rgba(244,63,94,0.3)] -ml-2.5"
+          className={`absolute w-3 h-3 border-2 ${thumbColor} rounded-full -ml-1.5`}
         />
-      </div>
-      <div className="w-[20%] text-right font-mono text-sm font-bold text-slate-900">
-        {value}
       </div>
     </div>
   );
@@ -159,9 +232,11 @@ export default function ReportResult() {
   const explanationsRef = useRef<Record<string, { explanation: string; precautions: string[] }>>({});
   const [overallSummary, setOverallSummary] = useState("");
   const [loadingSummary, setLoadingSummary] = useState(false);
+  const analysisTriggered = useRef(false);
 
   useEffect(() => {
-    if (location.state?.triggerAnalysis && resultData) {
+    if (location.state?.triggerAnalysis && resultData && !analysisTriggered.current) {
+      analysisTriggered.current = true;
       handleConfirm();
       window.history.replaceState({}, document.title);
     }

@@ -11,7 +11,7 @@ load_dotenv()
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 if not OPENROUTER_API_KEY:
-    raise Exception("❌ ERROR: OPENROUTER_API_KEY missing in .env file!")
+    raise Exception("[Error] OPENROUTER_API_KEY missing in .env file!")
 
 router = APIRouter()
 
@@ -32,7 +32,7 @@ async def handle_support_query(payload: SupportChatIn):
     and returns the AI's reply.
     """
     user_message = payload.message
-    print(f"💬 Received support query: '{user_message}'")
+    print(f"[Support] Received support query: '{user_message}'")
 
     # 1. Try direct Google AI Studio Gemini API first if key exists
     gemini_key = os.getenv("GEMINI_API_KEY")
@@ -52,10 +52,10 @@ async def handle_support_query(payload: SupportChatIn):
     )
 
     if gemini_key:
-        print("🔍 Trying direct Google AI Studio Gemini API first...")
+        print("[Support] Trying direct Google AI Studio Gemini API first...")
         for gemini_model in ["gemini-2.5-flash-lite", "gemini-3.1-flash-lite"]:
             try:
-                print(f"🔄 Trying direct Gemini model: {gemini_model}...")
+                print(f"[Support] Trying direct Gemini model: {gemini_model}...")
                 payload = {
                     "contents": [
                         {
@@ -72,12 +72,12 @@ async def handle_support_query(payload: SupportChatIn):
                 if response.status_code == 200:
                     result = response.json()
                     ai_response_text = result["candidates"][0]["content"]["parts"][0]["text"]
-                    print(f"✅ Direct Gemini model {gemini_model} response: '{ai_response_text[:80]}...'")
+                    print(f"[Support] Direct Gemini model {gemini_model} response: '{ai_response_text[:80]}...'")
                     return SupportChatOut(response=ai_response_text)
                 else:
-                    print(f"⚠️ Direct Gemini model {gemini_model} failed: {response.status_code} - {response.text}")
+                    print(f"[Warning] Direct Gemini model {gemini_model} failed: {response.status_code} - {response.text}")
             except Exception as e:
-                print(f"⚠️ Direct Gemini model {gemini_model} error: {e}")
+                print(f"[Warning] Direct Gemini model {gemini_model} error: {e}")
 
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
@@ -105,7 +105,7 @@ async def handle_support_query(payload: SupportChatIn):
     for model in [PRIMARY_MODEL, FALLBACK_MODEL]:
         json_payload["model"] = model
         try:
-            print(f"🤖 Trying support model: {model}")
+            print(f"[Support] Trying support model: {model}")
             response = requests.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers=headers,
@@ -115,10 +115,10 @@ async def handle_support_query(payload: SupportChatIn):
             response.raise_for_status()
             result = response.json()
             ai_response_text = result["choices"][0]["message"]["content"]
-            print(f"✅ Support Bot Response from {model}: '{ai_response_text[:80]}...'")
+            print(f"[Support] Support Bot Response from {model}: '{ai_response_text[:80]}...'")
             return SupportChatOut(response=ai_response_text)
         except Exception as e:
-            print(f"⚠️ Support model {model} failed: {e}")
+            print(f"[Warning] Support model {model} failed: {e}")
             continue
 
     raise HTTPException(

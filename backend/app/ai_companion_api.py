@@ -18,9 +18,9 @@ SUPABASE_URL = f"https://{os.getenv('SUPABASE_PROJECT_ID')}.supabase.co"
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 
 if not OPENROUTER_API_KEY:
-    raise Exception("❌ ERROR: OPENROUTER_API_KEY missing in .env file!")
+    raise Exception("[Error] OPENROUTER_API_KEY missing in .env file!")
 if not SUPABASE_ANON_KEY:
-    raise Exception("❌ ERROR: SUPABASE_ANON_KEY missing in .env file!")
+    raise Exception("[Error] SUPABASE_ANON_KEY missing in .env file!")
 
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
@@ -87,7 +87,7 @@ def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(secu
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Auth error: {e}")
+        print(f"[Error] Auth error: {e}")
         raise HTTPException(status_code=401, detail="Authentication failed.")
 
 
@@ -131,7 +131,7 @@ def fetch_chat_history(user_id: str) -> list[dict]:
         )
         return list(reversed(result.data or []))
     except Exception as e:
-        print(f"⚠️ Failed to fetch chat history: {e}")
+        print(f"[Warning] Failed to fetch chat history: {e}")
         return []
 
 
@@ -143,7 +143,7 @@ def save_message(user_id: str, role: str, content: str):
             "content": content,
         }).execute()
     except Exception as e:
-        print(f"⚠️ Failed to save message (role={role}): {e}")
+        print(f"[Warning] Failed to save message (role={role}): {e}")
 
 
 def fetch_user_profile(user_id: str) -> dict:
@@ -157,7 +157,7 @@ def fetch_user_profile(user_id: str) -> dict:
         )
         return result.data or {}
     except Exception as e:
-        print(f"⚠️ Failed to fetch profile: {e}")
+        print(f"[Warning] Failed to fetch profile: {e}")
         return {}
 
 
@@ -237,6 +237,41 @@ def fetch_latest_report(user_id: str) -> Optional[str]:
         except Exception as e:
             print(f"[Warning] Failed to fetch medicines for AI context: {e}")
 
+        # Also fetch latest symptom predictions for diagnostic context
+        try:
+            symptom_res = (
+                supabase.table("user_symptom_scores")
+                .select("symptoms, score, risk_level, created_at")
+                .eq("user_id", user_id)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            if symptom_res.data:
+                row = symptom_res.data[0]
+                symptom_list = row.get("symptoms", [])
+                score = row.get("score", 0)
+                risk_level = row.get("risk_level", "Stable")
+                created_dt = row.get("created_at", "")
+                created_at = created_dt[:10] if created_dt else "unknown date"
+                
+                from app.symptom import predict_disease_risks
+                predictions = predict_disease_risks(symptom_list)
+                
+                symptom_summary = [
+                    f"Patient Symptoms Logged (on {created_at}):",
+                    f"  Active Symptoms: {', '.join(symptom_list) if symptom_list else 'None'}",
+                    f"  Symptom Severity Index: {score}/100 ({risk_level})"
+                ]
+                
+                if predictions:
+                    top_preds = [f"{p['disease']} ({p['probability_percent']})" for p in predictions[:3]]
+                    symptom_summary.append(f"  ML Disease Predictor Risk: {', '.join(top_preds)}")
+                    
+                all_summaries.append("\n".join(symptom_summary))
+        except Exception as e:
+            print(f"[Warning] Failed to fetch symptoms for AI context: {e}")
+
         print(f"[Success] Loaded {len(result.data)} report(s) from Supabase for user {user_id[:8]}...")
         return "\n\n".join(all_summaries)
 
@@ -250,10 +285,10 @@ def fetch_latest_report(user_id: str) -> Optional[str]:
 def call_openrouter(messages_payload: list[dict]) -> str:
     gemini_key = os.getenv("GEMINI_API_KEY")
     if gemini_key:
-        print("🔍 Trying direct Google AI Studio Gemini API first...")
+        print("[AI] Trying direct Google AI Studio Gemini API first...")
         for gemini_model in ["gemini-2.5-flash-lite", "gemini-3.1-flash-lite"]:
             try:
-                print(f"🔄 Trying direct Gemini model: {gemini_model}...")
+                print(f"[AI] Trying direct Gemini model: {gemini_model}...")
                 system_instruction = ""
                 contents = []
                 for msg in messages_payload:
@@ -277,12 +312,12 @@ def call_openrouter(messages_payload: list[dict]) -> str:
                 if resp.status_code == 200:
                     raw_text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
                     clean_text = strip_markdown(raw_text)
-                    print(f"✅ Response from direct Gemini model {gemini_model}: {clean_text[:80]}...")
+                    print(f"[AI] Response from direct Gemini model {gemini_model}: {clean_text[:80]}...")
                     return clean_text
                 else:
-                    print(f"⚠️ Direct Gemini model {gemini_model} failed with status {resp.status_code}. Response: {resp.text}")
+                    print(f"[Warning] Direct Gemini model {gemini_model} failed with status {resp.status_code}. Response: {resp.text}")
             except Exception as e:
-                print(f"⚠️ Direct Gemini model {gemini_model} error: {e}")
+                print(f"[Warning] Direct Gemini model {gemini_model} error: {e}")
 
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
@@ -291,7 +326,7 @@ def call_openrouter(messages_payload: list[dict]) -> str:
 
     for model in [PRIMARY_MODEL, FALLBACK_MODEL]:
         try:
-            print(f"🤖 Trying model: {model}")
+            print(f"[AI] Trying model: {model}")
             resp = requests.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers=headers,
@@ -301,10 +336,10 @@ def call_openrouter(messages_payload: list[dict]) -> str:
             resp.raise_for_status()
             raw_text = resp.json()["choices"][0]["message"]["content"]
             clean_text = strip_markdown(raw_text)
-            print(f"✅ Response from {model}: {clean_text[:80]}...")
+            print(f"[AI] Response from {model}: {clean_text[:80]}...")
             return clean_text
         except Exception as e:
-            print(f"⚠️ Model {model} failed: {e}")
+            print(f"[Warning] Model {model} failed: {e}")
             continue
 
     raise HTTPException(
@@ -339,7 +374,7 @@ async def handle_chat_message(
     if not user_message:
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
-    print(f"💬 User [{user_id[:8]}...]: {user_message[:80]}")
+    print(f"[AI] User [{user_id[:8]}...]: {user_message[:80]}")
 
     # Build system prompt
     system_content = SYSTEM_PROMPT
@@ -359,7 +394,7 @@ async def handle_chat_message(
     if not report_context:
         report_context = payload.report_context
         if report_context:
-            print("ℹ️ Using frontend-provided report context (no DB report found)")
+            print("[AI] Using frontend-provided report context (no DB report found)")
 
     if report_context:
         system_content += (

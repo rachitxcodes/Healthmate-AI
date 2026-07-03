@@ -11,6 +11,7 @@ export default function ProfileSettings() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [dob, setDob] = useState("");
+  const [caregiverEmail, setCaregiverEmail] = useState("");
 
   const [notifications, setNotifications] = useState(true);
   const [emailReminder, setEmailReminder] = useState(false);
@@ -24,7 +25,7 @@ export default function ProfileSettings() {
     const fetchProfile = async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("full_name, email, phone, date_of_birth")
+        .select("full_name, email, phone, date_of_birth, caregiver_email")
         .eq("id", user.id)
         .single();
       if (!error && data) {
@@ -32,6 +33,7 @@ export default function ProfileSettings() {
         setEmail(data.email || user.email || "");
         setPhone(data.phone || "");
         setDob(data.date_of_birth || "");
+        setCaregiverEmail(data.caregiver_email || "");
       }
     };
     fetchProfile();
@@ -46,7 +48,12 @@ export default function ProfileSettings() {
 
     const { error } = await supabase
       .from("profiles")
-      .update({ full_name: name, phone: phone || null, date_of_birth: dob || null })
+      .update({ 
+        full_name: name, 
+        phone: phone || null, 
+        date_of_birth: dob || null,
+        caregiver_email: caregiverEmail || null
+      })
       .eq("id", user.id);
 
     if (error) {
@@ -123,6 +130,13 @@ export default function ProfileSettings() {
                 <div className="relative">
                   <Calendar size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className={`${inputClass} pl-11`} />
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Caregiver's Email (For SOS Alerts)</label>
+                <div className="relative">
+                  <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input type="email" value={caregiverEmail} onChange={(e) => setCaregiverEmail(e.target.value)} className={`${inputClass} pl-11`} placeholder="caregiver@example.com" />
                 </div>
               </div>
             </div>

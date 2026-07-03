@@ -23,7 +23,7 @@ SUPABASE_PROJECT_ID = os.getenv("SUPABASE_PROJECT_ID")
 SUPABASE_JWT_ISSUER = os.getenv("SUPABASE_JWT_ISSUER")
 OPENROUTER_API_KEY  = os.getenv("OPENROUTER_API_KEY")
 
-print("✅ Env loaded")
+print("[Env] Env loaded")
 
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI()
@@ -47,9 +47,9 @@ async def get_current_user_id(authorization: str = Header(None)):
 # ── Startup ───────────────────────────────────────────────────────────────────
 @app.on_event("startup")
 def startup_event():
-    print("🚀 Initializing HealthMate AI Engines...")
+    print("[Info] Initializing HealthMate AI Engines...")
     load_artifacts() # Now just a placeholder in symptom.py
-    print("✅ Rule-Based Symptom Engine & Risk Index Ready.")
+    print("[Success] Rule-Based Symptom Engine & Risk Index Ready.")
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(symptom_router, prefix="/api")
@@ -93,10 +93,10 @@ async def extract_medical_values_via_llm(image_bytes: Any, mime_type: str) -> di
     # 1. Try direct Google AI Studio Gemini API first if key exists
     gemini_key = os.getenv("GEMINI_API_KEY")
     if gemini_key:
-        print("🔍 Trying direct Google AI Studio Gemini API first...")
+        print("[OCR] Trying direct Google AI Studio Gemini API first...")
         for gemini_model in ["gemini-2.5-flash-lite", "gemini-3.1-flash-lite"]:
             try:
-                print(f"🔄 Trying direct Gemini model: {gemini_model}...")
+                print(f"[OCR] Trying direct Gemini model: {gemini_model}...")
                 payload = {
                     "contents": [
                         {
@@ -122,7 +122,7 @@ async def extract_medical_values_via_llm(image_bytes: Any, mime_type: str) -> di
                 if response.status_code == 200:
                     result = response.json()
                     content = result["candidates"][0]["content"]["parts"][0]["text"].strip()
-                    print(f"✅ Got direct response from Gemini model {gemini_model}!")
+                    print(f"[OCR] Got direct response from Gemini model {gemini_model}!")
                     if content.startswith("```"):
                         parts = content.split("```")
                         content = parts[1] if len(parts) > 1 else parts[0]
@@ -131,20 +131,20 @@ async def extract_medical_values_via_llm(image_bytes: Any, mime_type: str) -> di
                         content = content.strip()
                     return json.loads(content)
                 else:
-                    print(f"⚠️ Direct Gemini model {gemini_model} failed: {response.status_code} - {response.text}")
+                    print(f"[Warning] Direct Gemini model {gemini_model} failed: {response.status_code} - {response.text}")
             except Exception as e:
-                print(f"⚠️ Direct Gemini model {gemini_model} error: {e}")
+                print(f"[Warning] Direct Gemini model {gemini_model} error: {e}")
 
     # Try each model up to 3 rounds with delay between rounds
     for round in range(3):
         if round > 0:
             wait = round * 30
-            print(f"⏳ Round {round+1}: waiting {wait}s before retry...")
+            print(f"[OCR] Round {round+1}: waiting {wait}s before retry...")
             await asyncio.sleep(wait)
 
         for model in MODELS:
             try:
-                print(f"🔄 Trying {model}...")
+                print(f"[OCR] Trying {model}...")
                 payload = {
                     "model": model,
                     "messages": [{
@@ -170,11 +170,11 @@ async def extract_medical_values_via_llm(image_bytes: Any, mime_type: str) -> di
                     )
 
                 if response.status_code != 200:
-                    print(f"⚠️ {model} failed with status {response.status_code}. Response: {response.text}")
+                    print(f"[Warning] {model} failed with status {response.status_code}. Response: {response.text}")
                     continue
 
                 content = response.json()["choices"][0]["message"]["content"].strip()
-                print(f"✅ Got response from {model}")
+                print(f"[OCR] Got response from {model}")
 
                 if content.startswith("```"):
                     parts = content.split("```")
@@ -184,14 +184,14 @@ async def extract_medical_values_via_llm(image_bytes: Any, mime_type: str) -> di
                     content = content.strip()
 
                 extracted = json.loads(content)
-                print(f"✅ Extracted {len(extracted)} fields")
+                print(f"[OCR] Extracted {len(extracted)} fields")
                 return extracted
 
             except json.JSONDecodeError as e:
-                print(f"❌ JSON error from {model}: {e}")
+                print(f"[Error] JSON error from {model}: {e}")
                 continue
             except Exception as e:
-                print(f"❌ Error with {model}: {e}")
+                print(f"[Error] Error with {model}: {e}")
                 continue
 
     raise HTTPException(
@@ -212,28 +212,34 @@ async def upload_image(file: UploadFile = File(...)):
         image_bytes = await file.read()
         with open(file_path, "wb") as f:
             f.write(image_bytes)
-        print(f"📥 Received: {file.filename}")
+        print(f"[Pipeline] Received: {file.filename}")
 
-        print("🔍 Sending to Gemini OCR...")
+        print("[Pipeline] Sending to Gemini OCR...")
         extracted_data = await extract_medical_values_via_llm(
             image_bytes, file.content_type or "image/jpeg"
         )
-        print("✅ OCR extracted:", extracted_data)
+        print("[Pipeline] OCR extracted:", extracted_data)
 
-        print("🤖 Running ML predictions...")
+        print("[Pipeline] Running ML predictions...")
         predictions = process_report_data(extracted_data)
-        print("📊 Predictions complete")
+        print("[Pipeline] Predictions complete")
+
+        from app.prediction_api1 import normalize_input_data
+        clean_extracted = normalize_input_data(extracted_data)
+        
+        # Merge so that standard keys are replaced with clean, stripped numeric values
+        display_data = {**extracted_data, **clean_extracted}
 
         return {
             "message": "Report processed successfully",
-            "extracted_data": extracted_data,
+            "extracted_data": display_data,
             "predictions": predictions,
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        print("❌ Pipeline error:", e)
+        print("[Error] Pipeline error:", e)
         raise HTTPException(status_code=500, detail=str(e))
 
     finally:
@@ -241,4 +247,4 @@ async def upload_image(file: UploadFile = File(...)):
             if os.path.exists(file_path):
                 os.remove(file_path)
         except Exception as cleanup_err:
-            print("⚠️ Cleanup failed:", cleanup_err)
+            print("[Warning] Cleanup failed:", cleanup_err)

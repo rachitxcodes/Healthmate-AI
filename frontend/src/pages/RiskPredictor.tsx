@@ -69,6 +69,7 @@ export default function RiskPredictor() {
   };
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement>) => handleFilePick(e.target.files?.[0]);
+
   const onDragOver = (e: React.DragEvent) => { e.preventDefault(); setDragActive(true); };
   const onDragLeave = (e: React.DragEvent) => { e.preventDefault(); setDragActive(false); };
   const onDrop = (e: React.DragEvent) => { e.preventDefault(); setDragActive(false); handleFilePick(e.dataTransfer.files?.[0]); };

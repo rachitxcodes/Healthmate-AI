@@ -25,9 +25,9 @@ import ProtectedRoute from "./utils/ProtectedRoute";
 function Private({ children }: { children: React.ReactNode }) {
   return (
     <ProtectedRoute>
-      <div className="flex w-full min-h-screen bg-surface font-sans selection:bg-rose-200 selection:text-slate-900">
+      <div className="w-full min-h-screen bg-surface font-sans selection:bg-rose-200 selection:text-slate-900 relative overflow-x-hidden">
         <Sidebar />
-        <main className="flex-1 ml-24 lg:ml-32 min-h-screen overflow-y-auto">
+        <main className="w-full pl-24 lg:pl-32 min-h-screen">
           <Page>
             {children}
           </Page>

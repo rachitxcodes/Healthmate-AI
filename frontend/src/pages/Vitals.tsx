@@ -62,6 +62,7 @@ export default function Vitals() {
   const [sosProgress, setSosProgress] = useState(0);
   const sosTimerRef = useRef<any>(null);
 
+
   // --- Data Fetching ---
   const fetchData = async () => {
     try {
@@ -70,43 +71,38 @@ export default function Vitals() {
 
       const headers = { Authorization: `Bearer ${session.access_token}` };
 
-      // 1. Fetch History first
-      const historyResp = await fetch(`${API_BASE_URL}/api3/vitals/history?hours=24`, { headers });
-      let currentHistory: any[] = [];
-      let isHistoryDemo = false;
-      if (historyResp.ok) {
-        const historyData = await historyResp.json();
-        currentHistory = historyData.readings || [];
-        isHistoryDemo = !!historyData.is_demo;
-        setHistory(currentHistory);
-      }
-
-      // 2. Determine display vitals — always use the latest history point
-      let displayHr: number | null   = null;
+      // 1. Fetch Latest Vitals
+      let displayHr: number | null = null;
       let displaySpo2: number | null = null;
       let displayTemp: number | null = null;
 
       const vitalsResp = await fetch(`${API_BASE_URL}/api3/vitals/latest`, { headers });
       if (vitalsResp.ok) {
         const vitalsData = await vitalsResp.json();
-        if (currentHistory.length > 0 && !isHistoryDemo) {
-          const latestPoint = currentHistory[currentHistory.length - 1];
-          displayHr   = latestPoint.heart_rate;
-          displaySpo2 = latestPoint.spo2;
-          displayTemp = latestPoint.temperature;
-          setVitals({
-            ...vitalsData,
-            heart_rate: latestPoint.heart_rate,
-            spo2: latestPoint.spo2,
-            temperature: latestPoint.temperature,
-            recorded_at: latestPoint.recorded_at
-          });
-        } else {
-          displayHr   = vitalsData.heart_rate;
-          displaySpo2 = vitalsData.spo2;
-          displayTemp = vitalsData.temperature;
-          setVitals(vitalsData);
-        }
+        displayHr = vitalsData.heart_rate;
+        displaySpo2 = vitalsData.spo2;
+        displayTemp = vitalsData.temperature;
+        setVitals(vitalsData);
+
+        // 2. Append new reading dynamically to history state
+        setHistory(prevHistory => {
+          if (prevHistory.length === 0) return prevHistory;
+          const lastPoint = prevHistory[prevHistory.length - 1];
+          if (
+            lastPoint.recorded_at !== vitalsData.recorded_at || 
+            lastPoint.heart_rate !== vitalsData.heart_rate ||
+            lastPoint.spo2 !== vitalsData.spo2
+          ) {
+            const newPoint = {
+              heart_rate: vitalsData.heart_rate,
+              spo2: vitalsData.spo2,
+              temperature: vitalsData.temperature,
+              recorded_at: vitalsData.recorded_at || new Date().toISOString()
+            };
+            return [...prevHistory, newPoint].slice(-50);
+          }
+          return prevHistory;
+        });
       }
 
       // 3. Fetch Risk Score — pin to the exact same vitals we're displaying
@@ -125,31 +121,54 @@ export default function Vitals() {
     }
   };
 
+  // Fetch initial history once on mount
+  useEffect(() => {
+    const loadInitialHistory = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        const headers = { Authorization: `Bearer ${session.access_token}` };
+        const historyResp = await fetch(`${API_BASE_URL}/api3/vitals/history?hours=24`, { headers });
+        if (historyResp.ok) {
+          const historyData = await historyResp.json();
+          setHistory(historyData.readings || []);
+        }
+      } catch (err) {
+        console.warn("Failed to load initial vitals history:", err);
+      }
+    };
+    loadInitialHistory();
+  }, []);
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 5000); 
+    const interval = setInterval(fetchData, 1000);
     return () => clearInterval(interval);
   }, []);
 
   // --- SOS Logic ---
   const startSosTimer = () => {
+    if (sosTimerRef.current) return;
     setSosProgress(0);
-    const step = 2; 
+    const step = 2;
     sosTimerRef.current = setInterval(() => {
       setSosProgress(prev => {
         if (prev >= 100) {
           triggerSos();
           clearInterval(sosTimerRef.current);
+          sosTimerRef.current = null;
           return 100;
         }
         return prev + step;
       });
-    }, 50); 
+    }, 50);
   };
 
   const cancelSosTimer = () => {
-    clearInterval(sosTimerRef.current);
+    if (sosTimerRef.current) {
+      clearInterval(sosTimerRef.current);
+      sosTimerRef.current = null;
+    }
     setSosProgress(0);
   };
 
@@ -322,7 +341,7 @@ export default function Vitals() {
                 <span className="text-slate-400 font-bold text-[10px] uppercase tracking-tighter">Safety Score</span>
               </div>
             </div>
-            
+
             <div className="mt-8 w-full max-w-[260px] space-y-2">
               <span className="block text-[8px] font-black text-slate-300 uppercase tracking-widest text-center mb-2">Hazard Breakdown</span>
               {risk?.breakdown && Object.entries(risk.breakdown).map(([key, val]) => (
@@ -330,11 +349,11 @@ export default function Vitals() {
                   <div key={key} className="flex justify-between items-center bg-slate-50/80 p-2.5 rounded-xl border border-slate-100">
                     <div className="flex flex-col">
                       <span className="font-black text-slate-700 text-[9px] uppercase tracking-tighter">
-                        {key === 'symptom_points' ? 'Symptom Concern' : 
-                         key === 'temp_points' ? 'Thermal Stability' :
-                         key === 'hr_points' ? 'Cardiac Stability' :
-                         key === 'spo2_points' ? 'Oxygen Saturation' :
-                         key === 'report_points' ? 'Lab Report Risk' : key}
+                        {key === 'symptom_points' ? 'Symptom Concern' :
+                          key === 'temp_points' ? 'Thermal Stability' :
+                            key === 'hr_points' ? 'Cardiac Stability' :
+                              key === 'spo2_points' ? 'Oxygen Saturation' :
+                                key === 'report_points' ? 'Lab Report Risk' : key}
                       </span>
                     </div>
                     <span className="font-bold text-rose-500 text-[10px]">-{val}% Impact</span>
@@ -350,77 +369,89 @@ export default function Vitals() {
 
         {/* Charts: Insights (8 cols) */}
         <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-          
+
           {/* Heart Rate Chart */}
           <GlassCard className="!p-4 h-[240px]">
-             <div className="flex justify-between items-center mb-3">
-                <h3 className="text-slate-800 font-black uppercase text-[10px] tracking-widest flex items-center gap-1.5">
-                  <Heart size={12} className="text-rose-500" /> HR Trend (BPM)
-                </h3>
-                <span className="text-[9px] font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-100">Healthy Range: 60-100</span>
-             </div>
-             <div className="h-[160px] w-full mt-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={history}>
-                    <defs>
-                      <linearGradient id="colorHr" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f43f5e" stopOpacity={0.2}/><stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/></linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="recorded_at" tickFormatter={formatTime} hide />
-                    <YAxis domain={['auto', 'auto']} hide />
-                    <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 20px -5px rgb(0 0 0 / 0.1)', fontSize: '12px' }} />
-                    <Area type="monotone" dataKey="heart_rate" stroke="#f43f5e" strokeWidth={3} fillOpacity={1} fill="url(#colorHr)" dot={false} />
-                  </AreaChart>
-                </ResponsiveContainer>
-             </div>
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-slate-800 font-black uppercase text-[10px] tracking-widest flex items-center gap-1.5">
+                <Heart size={12} className="text-rose-500" /> HR Trend (BPM)
+              </h3>
+              <span className="text-[9px] font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-100">Healthy Range: 60-100</span>
+            </div>
+            <div className="h-[160px] w-full mt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={history}>
+                  <defs>
+                    <linearGradient id="colorHr" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f43f5e" stopOpacity={0.2} /><stop offset="95%" stopColor="#f43f5e" stopOpacity={0} /></linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="recorded_at" tickFormatter={formatTime} tick={{ fontSize: 9, fontWeight: 'bold' }} stroke="#cbd5e1" minTickGap={40} />
+                  <YAxis domain={[50, 120]} width={30} tick={{ fontSize: 9, fontWeight: 'bold' }} stroke="#cbd5e1" />
+                  <Tooltip 
+                    labelFormatter={(label) => `Time: ${formatTime(label)}`}
+                    formatter={(value: any) => [`${value} BPM`, "Heart Rate"]}
+                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 20px -5px rgb(0 0 0 / 0.1)', fontSize: '12px' }} 
+                  />
+                  <Area type="monotone" dataKey="heart_rate" stroke="#f43f5e" strokeWidth={3} fillOpacity={1} fill="url(#colorHr)" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
           </GlassCard>
 
           {/* SpO2 Chart */}
           <GlassCard className="!p-4 h-[240px]">
-             <div className="flex justify-between items-center mb-3">
-                <h3 className="text-slate-800 font-black uppercase text-[10px] tracking-widest flex items-center gap-1.5">
-                  <Droplets size={12} className="text-blue-500" /> Oxygen Trend (%)
-                </h3>
-                <span className="text-[9px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-100">Safe: &gt;94%</span>
-             </div>
-             <div className="h-[160px] w-full mt-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={history}>
-                    <defs>
-                      <linearGradient id="colorSpo2" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="recorded_at" tickFormatter={formatTime} hide />
-                    <YAxis domain={[90, 100]} hide />
-                    <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 20px -5px rgb(0 0 0 / 0.1)', fontSize: '12px' }} />
-                    <Area type="monotone" dataKey="spo2" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorSpo2)" dot={false} />
-                  </AreaChart>
-                </ResponsiveContainer>
-             </div>
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-slate-800 font-black uppercase text-[10px] tracking-widest flex items-center gap-1.5">
+                <Droplets size={12} className="text-blue-500" /> Oxygen Trend (%)
+              </h3>
+              <span className="text-[9px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-100">Safe: &gt;94%</span>
+            </div>
+            <div className="h-[160px] w-full mt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={history}>
+                  <defs>
+                    <linearGradient id="colorSpo2" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} /><stop offset="95%" stopColor="#3b82f6" stopOpacity={0} /></linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="recorded_at" tickFormatter={formatTime} tick={{ fontSize: 9, fontWeight: 'bold' }} stroke="#cbd5e1" minTickGap={40} />
+                  <YAxis domain={[85, 100]} width={30} tick={{ fontSize: 9, fontWeight: 'bold' }} stroke="#cbd5e1" />
+                  <Tooltip 
+                    labelFormatter={(label) => `Time: ${formatTime(label)}`}
+                    formatter={(value: any) => [`${value} %`, "Oxygen Level"]}
+                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 20px -5px rgb(0 0 0 / 0.1)', fontSize: '12px' }} 
+                  />
+                  <Area type="monotone" dataKey="spo2" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorSpo2)" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
           </GlassCard>
 
           {/* Temperature Chart (Spans 2 cols for wide trend) */}
           <GlassCard className="!p-4 h-[240px] md:col-span-2">
-             <div className="flex justify-between items-center mb-3">
-                <h3 className="text-slate-800 font-black uppercase text-[10px] tracking-widest flex items-center gap-1.5">
-                  <Thermometer size={12} className="text-amber-500" /> Body Temperature Drift
-                </h3>
-                <span className="text-[9px] font-bold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-100">Range: 36.2 - 37.2°C</span>
-             </div>
-             <div className="h-[160px] w-full mt-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={history}>
-                    <defs>
-                      <linearGradient id="colorTemp" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f59e0b" stopOpacity={0.2}/><stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/></linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="recorded_at" tickFormatter={formatTime} tick={{ fontSize: 9, fontWeight: 'bold' }} stroke="#cbd5e1" />
-                    <YAxis domain={['auto', 'auto']} hide />
-                    <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 20px -5px rgb(0 0 0 / 0.1)', fontSize: '12px' }} />
-                    <Area type="monotone" dataKey="temperature" stroke="#f59e0b" strokeWidth={2} fillOpacity={1} fill="url(#colorTemp)" dot={false} />
-                  </AreaChart>
-                </ResponsiveContainer>
-             </div>
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-slate-800 font-black uppercase text-[10px] tracking-widest flex items-center gap-1.5">
+                <Thermometer size={12} className="text-amber-500" /> Body Temperature Drift
+              </h3>
+              <span className="text-[9px] font-bold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-100">Range: 36.2 - 37.2°C</span>
+            </div>
+            <div className="h-[160px] w-full mt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={history}>
+                  <defs>
+                    <linearGradient id="colorTemp" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f59e0b" stopOpacity={0.2} /><stop offset="95%" stopColor="#f59e0b" stopOpacity={0} /></linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="recorded_at" tickFormatter={formatTime} tick={{ fontSize: 9, fontWeight: 'bold' }} stroke="#cbd5e1" minTickGap={40} />
+                  <YAxis domain={[35, 41]} width={30} tick={{ fontSize: 9, fontWeight: 'bold' }} stroke="#cbd5e1" />
+                  <Tooltip 
+                    labelFormatter={(label) => `Time: ${formatTime(label)}`}
+                    formatter={(value: any) => [`${value} °C`, "Temperature"]}
+                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 20px -5px rgb(0 0 0 / 0.1)', fontSize: '12px' }} 
+                  />
+                  <Area type="monotone" dataKey="temperature" stroke="#f59e0b" strokeWidth={2} fillOpacity={1} fill="url(#colorTemp)" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
           </GlassCard>
 
         </div>
