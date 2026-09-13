@@ -288,7 +288,7 @@ export default function AiCompanion() {
           <div ref={chatEndRef} className="h-4" />
         </div>
 
-        {/* Input Area */}
+        {/*  Input Area */}
         <div className="p-4 md:p-6 bg-white/60 backdrop-blur-md border-t border-rose-100/50">
           <AnimatePresence>
             {error && (

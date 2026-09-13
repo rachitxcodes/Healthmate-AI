@@ -281,6 +281,7 @@ class ExplainRequest(BaseModel):
     risk_percent: str
     matched_features: list[str]
     extracted_data: dict[str, Any]
+    language: str = "en-IN"
 
 @router.post("/explain")
 async def explain_risk(body: ExplainRequest):
@@ -299,7 +300,11 @@ async def explain_risk(body: ExplainRequest):
         if k in body.matched_features
     )
 
+    language_names = {"en-IN": "English", "hi-IN": "Hindi", "hi-en": "natural Hinglish"}
+    response_language = language_names.get(body.language, "English")
+
     prompt = f"""You are a friendly, caring health assistant explaining medical results to a patient in simple everyday language.
+Write the complete response in {response_language}. Do not mix languages unless the selected language is natural Hinglish.
 
 Disease analyzed: {body.disease.replace("_", " ").title()}
 Risk score: {body.risk_percent}
@@ -439,6 +444,7 @@ class SummarizeRequest(BaseModel):
     predictions: dict[str, Any]
     explanations: dict[str, Any]
     extracted_data: dict[str, Any]
+    language: str = "en-IN"
 
 @router.post("/summarize-report")
 async def summarize_report(body: SummarizeRequest):
@@ -454,7 +460,11 @@ async def summarize_report(body: SummarizeRequest):
             explanation = exp_data.get("explanation", "")
             diseases_info.append(f"- {disease.replace('_', ' ').title()}: Risk is {risk_pct}. Explanation: {explanation}")
             
+    language_names = {"en-IN": "English", "hi-IN": "Hindi", "hi-en": "natural Hinglish"}
+    response_language = language_names.get(body.language, "English")
+
     prompt = f"""You are a professional, friendly, and compassionate medical AI assistant.
+Write the complete summary in {response_language}. Do not mix languages unless the selected language is natural Hinglish.
 Review the following patient analysis and write a concise, reassuring 2-3 sentence overall health summary for the patient.
 Your summary should provide a high-level picture of their health markers and direct them on what to focus on (e.g. diet, general checkup), ending on a warm, positive note. Keep it simple and clear.
 

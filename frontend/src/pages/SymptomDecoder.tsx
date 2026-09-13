@@ -700,7 +700,10 @@ export default function SymptomDecoder() {
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                {predictedDiseases.slice(0, 4).map((pred) => (
+                {predictedDiseases
+                  .filter((pred) => pred.probability >= 0.15)
+                  .slice(0, 4)
+                  .map((pred) => (
                   <div key={pred.disease} className="bg-slate-50/70 border border-slate-100 rounded-xl p-4 flex flex-col gap-3">
                     <div className="flex justify-between items-center">
                       <div>

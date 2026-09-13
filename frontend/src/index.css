@@ -21,3 +21,222 @@
     scrollbar-width: none;
   }
 }
+
+/* Sidebar glass */
+.dark .bg-white\/80.backdrop-blur-xl {
+  background-color: rgba(11, 20, 40, 0.92) !important;
+  border-color: rgba(79, 142, 247, 0.13) !important;
+}
+
+/* ── TEXT ────────────────────────────────────────────────── */
+.dark .text-slate-900,
+.dark .text-slate-800 {
+  color: var(--text-primary) !important;
+}
+
+.dark .text-slate-700,
+.dark .text-slate-600 {
+  color: var(--text-secondary) !important;
+}
+
+.dark .text-slate-500,
+.dark .text-slate-400 {
+  color: var(--text-muted) !important;
+}
+
+/* ── BORDERS ─────────────────────────────────────────────── */
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-rose-100,
+.dark .border-rose-100\/50,
+.dark .border-rose-100\/60 {
+  border-color: var(--border-subtle) !important;
+}
+
+/* ── FORM INPUTS ─────────────────────────────────────────── */
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #0C1629 !important;
+  color: var(--text-primary) !important;
+  border-color: rgba(79, 142, 247, 0.22) !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: var(--text-muted) !important;
+}
+
+.dark input:focus,
+.dark select:focus,
+.dark textarea:focus {
+  border-color: rgba(79, 142, 247, 0.5) !important;
+  box-shadow: 0 0 0 3px rgba(79, 142, 247, 0.1) !important;
+  outline: none;
+}
+
+/* ── SIDEBAR HOVER IN DARK ───────────────────────────────── */
+.dark .hover\:bg-rose-50\/80:hover {
+  background-color: rgba(79, 142, 247, 0.1) !important;
+  color: #4F8EF7 !important;
+}
+
+.dark .hover\:bg-rose-50:hover {
+  background-color: rgba(244, 63, 94, 0.1) !important;
+}
+
+/* Keep active rose gradient as-is (it looks fine) */
+
+/* ── GRADIENT PAGE BACKGROUNDS (Navbar etc) ──────────────── */
+.dark [class*="from-\[#FFF1F2\]"] {
+  --tw-gradient-from: #080E1C !important;
+}
+
+.dark [class*="via-\[#FFF1F2\]"] {
+  --tw-gradient-via: rgba(8, 14, 28, 0.95) !important;
+}
+
+/* ── SCROLLBAR ───────────────────────────────────────────── */
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.18);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.35);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(79, 142, 247, 0.2);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(79, 142, 247, 0.4);
+}
+
+/* ── GLASS CARD HELPER ───────────────────────────────────── */
+.glass-card {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(99, 102, 241, 0.1);
+}
+
+.dark .glass-card {
+  background: rgba(11, 20, 42, 0.85) !important;
+  border: 1px solid rgba(79, 142, 247, 0.13) !important;
+}
+
+/* ── PAGE & SECTION GRADIENT OVERRIDES ──────────────────── */
+/* Dashboard page wrapper: from-surface via-rose-50/30 to-rose-100/20 */
+.dark [class*='from-surface'],
+.dark [class*='via-rose-50'],
+.dark [class*='to-rose-100'] {
+  --tw-gradient-from: #080E1C !important;
+  --tw-gradient-via: #080E1C !important;
+  --tw-gradient-to: #080E1C !important;
+  background: #080E1C !important;
+}
+
+/* AiCompanion chat bubble container: from-rose-50/80 to-pink-50/30 */
+.dark [class*='from-rose-50'] {
+  --tw-gradient-from: #0F1C35 !important;
+}
+
+.dark [class*='to-pink-50'] {
+  --tw-gradient-to: #0F1C35 !important;
+}
+
+.dark [class*='via-pink-50'] {
+  --tw-gradient-via: #0F1C35 !important;
+}
+
+/* Upload zone & review container: from-rose-50/40 to-white */
+.dark [class*='to-white'] {
+  --tw-gradient-to: #0F1C35 !important;
+}
+
+/* Scanning border bg  */
+.dark [class*='bg-rose-50'] {
+  background-color: rgba(15, 28, 53, 0.8) !important;
+}
+
+.dark [class*='bg-rose-50\/30'] {
+  background-color: rgba(15, 28, 53, 0.5) !important;
+}
+
+/* NavbarPrivate top gradient from-[#FFF9FA] */
+.dark [class*='from-\[#FFF9FA\]'] {
+  --tw-gradient-from: #080E1C !important;
+}
+
+.dark [class*='via-\[#FFF9FA\]'] {
+  --tw-gradient-via: rgba(8, 14, 28, 0.95) !important;
+}
+
+/* Report context badge */
+.dark .bg-emerald-50 {
+  background-color: rgba(16, 185, 129, 0.1) !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+.dark .border-emerald-200 {
+  border-color: rgba(16, 185, 129, 0.25) !important;
+}
+
+.dark .text-emerald-700 {
+  color: #6EE7B7 !important;
+}
+
+/* ── TOP ICON BUTTONS (Dashboard header) ─────────────────── */
+.dark .bg-white\/80.backdrop-blur {
+  background-color: rgba(15, 28, 53, 0.85) !important;
+  border-color: rgba(79, 142, 247, 0.15) !important;
+}
+
+/* AI Doctor chat bubble avatars */
+.dark .bg-white.shadow-sm.border-rose-100,
+.dark .bg-white.shadow-xl.border-rose-100 {
+  background-color: var(--bg-elevated) !important;
+  border-color: rgba(79, 142, 247, 0.15) !important;
+}
+
+/* AI message bubbles */
+.dark .bg-white.text-slate-700.rounded-\[1\.5rem\] {
+  background-color: var(--bg-card) !important;
+  color: var(--text-secondary) !important;
+  border-color: rgba(79, 142, 247, 0.12) !important;
+}
+
+/* Dashboard medication calendar / rose-500/10 card */
+.dark [class*='from-rose-500\/10'] {
+  --tw-gradient-from: rgba(15, 28, 53, 0.6) !important;
+}
+
+.dark [class*='to-rose-600\/5'] {
+  --tw-gradient-to: rgba(15, 28, 53, 0.3) !important;
+}
+
+.dark .border-rose-100\/50 {
+  border-color: rgba(79, 142, 247, 0.1) !important;
+}

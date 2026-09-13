@@ -10,6 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from dotenv import load_dotenv
 
+load_dotenv()
+
 from app.ai_companion_api import router as ai_router
 from app.symptom import router as symptom_router, load_artifacts
 from app.prediction_api1 import router as prediction_router, process_report_data
@@ -17,7 +19,7 @@ from app.medicine_api import router as medicine_router
 from app.support_chat_api import router as support_bot_router
 from app.vitals_api import router as vitals_router
 
-load_dotenv()
+from app.voice_api import router as voice_router
 
 SUPABASE_PROJECT_ID = os.getenv("SUPABASE_PROJECT_ID")
 SUPABASE_JWT_ISSUER = os.getenv("SUPABASE_JWT_ISSUER")
@@ -27,6 +29,7 @@ print("[Env] Env loaded")
 
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI()
+app.include_router(voice_router)
 
 app.add_middleware(
     CORSMiddleware,

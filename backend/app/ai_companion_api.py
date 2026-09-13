@@ -96,6 +96,7 @@ def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(secu
 class ChatIn(BaseModel):
     message: str
     report_context: Optional[str] = None  # frontend fallback if no DB report
+    language: Optional[str] = "en-IN"
 
 class ChatOut(BaseModel):
     response: str
@@ -378,6 +379,12 @@ async def handle_chat_message(
 
     # Build system prompt
     system_content = SYSTEM_PROMPT
+    language_names = {"en-IN": "English", "hi-IN": "Hindi", "hi-en": "natural Hinglish"}
+    response_language = language_names.get(payload.language or "en-IN", "English")
+    system_content += (
+        f"\n\nRespond in {response_language}. Keep the response natural for spoken conversation "
+        "and avoid markdown tables or long lists when the user is using voice."
+    )
 
     # Inject user profile name
     profile = fetch_user_profile(user_id)

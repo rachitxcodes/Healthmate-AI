@@ -11,7 +11,7 @@ from jose import jwt
 
 import requests
 from fastapi import APIRouter, HTTPException, Depends, Query, Header
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from dotenv import load_dotenv
 from supabase import create_client
 
@@ -95,13 +95,34 @@ def get_frontend_user(authorization: str = Header(None)) -> dict:
 # ============================================================================
 
 class VitalsIn(BaseModel):
-    heart_rate: float = Field(..., ge=40, le=200, description="BPM")
-    spo2: float = Field(..., ge=70, le=100, description="Percent")
-    temperature: float = Field(..., ge=10, le=43, description="Celsius")
+    heart_rate: float = Field(..., description="BPM")
+    spo2: float = Field(..., description="Percent")
+    temperature: float = Field(..., description="Celsius")
     symptom_score: Optional[float] = Field(default=0, ge=0, le=100)
     steps: Optional[int] = Field(default=0, description="Step count")
     activity: Optional[str] = Field(default="stable", description="Current activity")
     fall_detected: Optional[bool] = Field(default=False)
+
+    @field_validator("heart_rate", mode="before")
+    @classmethod
+    def clamp_heart_rate(cls, v):
+        if v is not None:
+            return max(40.0, min(float(v), 220.0))
+        return v
+
+    @field_validator("spo2", mode="before")
+    @classmethod
+    def clamp_spo2(cls, v):
+        if v is not None:
+            return max(70.0, min(float(v), 100.0))
+        return v
+
+    @field_validator("temperature", mode="before")
+    @classmethod
+    def clamp_temperature(cls, v):
+        if v is not None:
+            return max(10.0, min(float(v), 45.0))
+        return v
 
 # ============================================================================
 # RISK CALCULATOR
@@ -254,8 +275,8 @@ def fetch_latest_symptom_score(user_id: str) -> int:
 # EMAIL
 # ============================================================================
 
-def send_alert_email(to_emails: list, subject: str, body: str) -> bool:
-    """Send email via SendGrid"""
+def send_alert_email(to_emails: list, subject: str, body: str, html_body: str = "") -> bool:
+    """Send a styled HTML alert with a plain-text fallback via SendGrid."""
     if not SENDGRID_API_KEY:
         print("[Warning] SENDGRID_API_KEY not set — email skipped")
         return False
@@ -265,7 +286,10 @@ def send_alert_email(to_emails: list, subject: str, body: str) -> bool:
             "personalizations": [{"to": [{"email": e} for e in to_emails]}],
             "from": {"email": SENDGRID_FROM_EMAIL, "name": "HealthMate AI"},
             "subject": subject,
-            "content": [{"type": "text/plain", "value": body}],
+            "content": [
+                {"type": "text/plain", "value": body},
+                {"type": "text/html", "value": html_body or f"<pre>{body}</pre>"},
+            ],
         }
         resp = requests.post(
             "https://api.sendgrid.com/v3/mail/send",
@@ -285,6 +309,41 @@ def send_alert_email(to_emails: list, subject: str, body: str) -> bool:
     except Exception as e:
         print(f"[Error] Email error: {e}")
         return False
+
+
+def escape_html(value) -> str:
+    """Escape dynamic values before placing them in an alert email."""
+    import html
+    return html.escape(str(value if value is not None else "Not available"))
+
+
+def build_alert_email_html(title: str, subtitle: str, full_name: str, score: int, status: str, vitals: dict, action: str) -> str:
+    """Build a readable caregiver email instead of a plain text block."""
+    return f"""<!doctype html>
+<html><body style="margin:0;background:#f4f7fb;font-family:Arial,sans-serif;color:#172033">
+    <div style="max-width:620px;margin:24px auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden">
+        <div style="background:#be123c;color:#ffffff;padding:24px 28px">
+            <div style="font-size:12px;letter-spacing:1.5px;text-transform:uppercase;opacity:.85">HealthMate AI</div>
+            <h1 style="margin:8px 0 4px;font-size:25px">{escape_html(title)}</h1>
+            <p style="margin:0;font-size:14px;opacity:.9">{escape_html(subtitle)}</p>
+        </div>
+        <div style="padding:26px 28px">
+            <p style="margin:0 0 18px;font-size:16px">This alert concerns <strong>{escape_html(full_name)}</strong>.</p>
+            <div style="display:flex;gap:12px;margin-bottom:22px">
+                <div style="flex:1;background:#fff1f2;border-radius:10px;padding:14px"><div style="font-size:11px;color:#9f1239;text-transform:uppercase">Risk score</div><strong style="font-size:24px;color:#be123c">{escape_html(score)}/100</strong></div>
+                <div style="flex:1;background:#fff7ed;border-radius:10px;padding:14px"><div style="font-size:11px;color:#9a3412;text-transform:uppercase">Status</div><strong style="font-size:24px;color:#c2410c">{escape_html(status)}</strong></div>
+            </div>
+            <h2 style="font-size:16px;margin:0 0 10px">Latest vital readings</h2>
+            <table style="width:100%;border-collapse:collapse;font-size:14px">
+                <tr><td style="padding:10px;border-bottom:1px solid #e2e8f0">Heart rate</td><td style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:right"><strong>{escape_html(vitals.get('heart_rate'))} BPM</strong></td></tr>
+                <tr><td style="padding:10px;border-bottom:1px solid #e2e8f0">SpO2</td><td style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:right"><strong>{escape_html(vitals.get('spo2'))}%</strong></td></tr>
+                <tr><td style="padding:10px">Temperature</td><td style="padding:10px;text-align:right"><strong>{escape_html(vitals.get('temperature'))} C</strong></td></tr>
+            </table>
+            <div style="margin-top:22px;padding:15px 16px;background:#fff7ed;border-left:4px solid #f97316;border-radius:6px;font-size:14px"><strong>Recommended next step:</strong> {escape_html(action)}</div>
+            <p style="margin:22px 0 0;color:#64748b;font-size:12px">This notification is generated by HealthMate AI. It is not a diagnosis. Contact a medical professional or emergency services when appropriate.</p>
+        </div>
+    </div>
+</body></html>"""
 
 # ============================================================================
 # ALERT LOGIC
@@ -334,9 +393,11 @@ def maybe_send_critical_alert(user_id, score, status, previous_status, breakdown
         print("[Warning] No email addresses")
         return False, alert_id
 
-    subject = f"[Alert] HealthMate AI — Critical Alert for {full_name}"
+    fall_alert = breakdown.get("fall") == "IMMEDIATE ACTION REQUIRED"
+    subject_prefix = "[FALL ALERT]" if fall_alert else "[Alert]"
+    subject = f"{subject_prefix} HealthMate AI — Critical Alert for {full_name}"
     body = (
-        f"Critical health alert!\n\n"
+        f"{'FALL DETECTED — IMMEDIATE ACTION REQUIRED!' if fall_alert else 'Critical health alert!'}\n\n"
         f"Risk Score: {score}/100\n"
         f"Status: {status}\n\n"
         f"Vitals:\n"
@@ -346,8 +407,17 @@ def maybe_send_critical_alert(user_id, score, status, previous_status, breakdown
         f"Please seek medical attention.\n"
         f"— HealthMate AI"
     )
+    html_body = build_alert_email_html(
+        "Fall detected — immediate action required" if fall_alert else "Critical health alert",
+        "The smart band detected a possible fall" if fall_alert else "Immediate attention may be required",
+        full_name,
+        score,
+        status,
+        vitals,
+        "Check on the patient immediately and contact emergency services if necessary." if fall_alert else "Please check on the patient and seek medical attention if needed.",
+    )
     
-    email_sent = send_alert_email(to_emails, subject, body)
+    email_sent = send_alert_email(to_emails, subject, body, html_body)
     return email_sent, alert_id
 
 # ============================================================================
@@ -417,9 +487,11 @@ async def post_vitals(body: VitalsIn, user: dict = Depends(get_current_user_api_
     previous_status = fetch_previous_status(user_id)
 
     # SPECIAL: Fall Detection Alert
+    fall_email_sent = False
+    fall_alert_id = None
     if body.fall_detected:
         print("[Alert] FALL DETECTED! Sending emergency alert...")
-        maybe_send_critical_alert(
+        fall_email_sent, fall_alert_id = maybe_send_critical_alert(
             user_id, 100, "Critical", "Stable", 
             {"fall": "IMMEDIATE ACTION REQUIRED"}, 
             {"heart_rate": body.heart_rate, "spo2": body.spo2, "temperature": body.temperature}
@@ -442,9 +514,12 @@ async def post_vitals(body: VitalsIn, user: dict = Depends(get_current_user_api_
         "spo2": body.spo2,
         "temperature": body.temperature,
     }
-    email_sent, alert_id = maybe_send_critical_alert(
-        user_id, score, status, previous_status, breakdown, vitals_dict
-    )
+    if body.fall_detected:
+        email_sent, alert_id = fall_email_sent, fall_alert_id
+    else:
+        email_sent, alert_id = maybe_send_critical_alert(
+            user_id, score, status, previous_status, breakdown, vitals_dict
+        )
 
     return {
         "score": score,
@@ -714,7 +789,16 @@ async def trigger_sos(user: dict = Depends(get_frontend_user)):
     if to_emails:
         subject = f"🆘 EMERGENCY SOS — {full_name}"
         body = f"Emergency SOS from {full_name}. Last vitals: HR={latest_vitals.get('heart_rate')}, SpO2={latest_vitals.get('spo2')}%. Check immediately!"
-        email_sent = send_alert_email(to_emails, subject, body)
+        html_body = build_alert_email_html(
+            "Emergency SOS alert",
+            "The patient manually requested emergency assistance",
+            full_name,
+            100,
+            "Critical",
+            latest_vitals,
+            "Check on the patient immediately and contact emergency services if necessary.",
+        )
+        email_sent = send_alert_email(to_emails, subject, body, html_body)
 
     return {
         "alert_id": alert_id,

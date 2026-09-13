@@ -121,6 +121,10 @@ def load_artifacts():
         print(f"[Error] Error loading ML symptom artifacts: {e}")
 
 # --- Helper logic for ML Prediction ---
+MIN_PREDICTION_PROBABILITY = 0.15
+MAX_PREDICTIONS = 5
+
+
 def predict_disease_risks(input_symptoms: list[str]) -> list[dict]:
     if _MODEL is None or _FEATURES is None:
         return []
@@ -164,7 +168,7 @@ def predict_disease_risks(input_symptoms: list[str]) -> list[dict]:
         
         predictions = []
         for class_name, prob in zip(_MODEL.classes_, probabilities):
-            if prob > 0.01:  # threshold 1%
+            if prob >= MIN_PREDICTION_PROBABILITY:
                 disease = str(class_name).strip()
                 med_info = DISEASE_OTC_MAPPING.get(disease, {
                     "name": "General Consult",
@@ -181,7 +185,7 @@ def predict_disease_risks(input_symptoms: list[str]) -> list[dict]:
         
         # Sort descending by probability
         predictions.sort(key=lambda x: x["probability"], reverse=True)
-        return predictions
+        return predictions[:MAX_PREDICTIONS]
     except Exception as e:
         print(f"[Warning] Error running disease prediction: {e}")
         return []

@@ -69,7 +69,6 @@ export default function RiskPredictor() {
   };
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement>) => handleFilePick(e.target.files?.[0]);
-
   const onDragOver = (e: React.DragEvent) => { e.preventDefault(); setDragActive(true); };
   const onDragLeave = (e: React.DragEvent) => { e.preventDefault(); setDragActive(false); };
   const onDrop = (e: React.DragEvent) => { e.preventDefault(); setDragActive(false); handleFilePick(e.dataTransfer.files?.[0]); };
@@ -395,36 +394,34 @@ export default function RiskPredictor() {
                         {report.imageSrc ? (
                           <img src={report.imageSrc} alt={report.name} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
                         ) : (
-                          <div className={`w-full h-full flex flex-col items-center justify-center gap-2 transition-colors ${
-                            (() => {
+                          <div className={`w-full h-full flex flex-col items-center justify-center gap-2 transition-colors ${(() => {
                               const keys = Object.keys(report.extractedData || {}).map(k => k.toLowerCase());
-                              const hasBlood = keys.some(k => ["hgb","hemoglobin","rbc","wbc","pcv","platelet"].some(m => k.includes(m)));
-                              const hasLiver = keys.some(k => ["bilirubin","albumin","sgpt","sgot","alt","ast"].some(m => k.includes(m)));
-                              const hasDiabetes = keys.some(k => ["glucose","insulin"].some(m => k.includes(m)));
+                              const hasBlood = keys.some(k => ["hgb", "hemoglobin", "rbc", "wbc", "pcv", "platelet"].some(m => k.includes(m)));
+                              const hasLiver = keys.some(k => ["bilirubin", "albumin", "sgpt", "sgot", "alt", "ast"].some(m => k.includes(m)));
+                              const hasDiabetes = keys.some(k => ["glucose", "insulin"].some(m => k.includes(m)));
                               if (hasLiver) return "bg-orange-50";
                               if (hasDiabetes) return "bg-blue-50";
                               if (hasBlood) return "bg-rose-50";
                               return "bg-slate-50";
                             })()
-                          }`}>
-                            <FileText size={36} className={`${
-                              (() => {
+                            }`}>
+                            <FileText size={36} className={`${(() => {
                                 const keys = Object.keys(report.extractedData || {}).map(k => k.toLowerCase());
-                                const hasBlood = keys.some(k => ["hgb","hemoglobin","rbc","wbc","pcv","platelet"].some(m => k.includes(m)));
-                                const hasLiver = keys.some(k => ["bilirubin","albumin","sgpt","sgot","alt","ast"].some(m => k.includes(m)));
-                                const hasDiabetes = keys.some(k => ["glucose","insulin"].some(m => k.includes(m)));
+                                const hasBlood = keys.some(k => ["hgb", "hemoglobin", "rbc", "wbc", "pcv", "platelet"].some(m => k.includes(m)));
+                                const hasLiver = keys.some(k => ["bilirubin", "albumin", "sgpt", "sgot", "alt", "ast"].some(m => k.includes(m)));
+                                const hasDiabetes = keys.some(k => ["glucose", "insulin"].some(m => k.includes(m)));
                                 if (hasLiver) return "text-orange-300";
                                 if (hasDiabetes) return "text-blue-300";
                                 if (hasBlood) return "text-rose-300";
                                 return "text-slate-300";
                               })()
-                            }`} />
+                              }`} />
                             <span className="text-xs font-bold text-slate-400">
                               {(() => {
                                 const keys = Object.keys(report.extractedData || {}).map(k => k.toLowerCase());
-                                const hasBlood = keys.some(k => ["hgb","hemoglobin","rbc","wbc","pcv","platelet"].some(m => k.includes(m)));
-                                const hasLiver = keys.some(k => ["bilirubin","albumin","sgpt","sgot","alt","ast"].some(m => k.includes(m)));
-                                const hasDiabetes = keys.some(k => ["glucose","insulin"].some(m => k.includes(m)));
+                                const hasBlood = keys.some(k => ["hgb", "hemoglobin", "rbc", "wbc", "pcv", "platelet"].some(m => k.includes(m)));
+                                const hasLiver = keys.some(k => ["bilirubin", "albumin", "sgpt", "sgot", "alt", "ast"].some(m => k.includes(m)));
+                                const hasDiabetes = keys.some(k => ["glucose", "insulin"].some(m => k.includes(m)));
                                 if (hasLiver) return "Liver Report";
                                 if (hasDiabetes) return "Diabetes Report";
                                 if (hasBlood) return "Blood Report";

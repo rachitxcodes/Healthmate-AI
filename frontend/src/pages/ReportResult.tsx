@@ -1,9 +1,11 @@
 import { Link, useLocation } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
+import { Download } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../supabaseClient";
 import GlassCard from "../components/GlassCard";
 import PrimaryButton from "../components/PrimaryButton";
+import AIVoiceSummaryPlayer from "../components/AIVoiceSummaryPlayer";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://healthmate-api-2qu0.onrender.com";
 
@@ -22,6 +24,8 @@ interface DiseaseResult extends Prediction {
   loadingExplanation?: boolean;
 }
 
+type ReportLanguage = "en-IN" | "hi-IN" | "hi-en";
+
 interface ApiResult {
   message: string;
   extracted_data: Record<string, string | number>;
@@ -37,6 +41,66 @@ function riskColor(pct: string) {
 
 function formatDiseaseName(key: string) {
   return key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function downloadFullReport(
+  overallSummary: string,
+  results: Record<string, DiseaseResult>,
+  extractedData: Record<string, string | number>,
+) {
+  const escapeHtml = (value: string) => value.replace(/[&<>\"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#039;",
+  }[character] || character));
+  const rangeAliases: Record<string, string> = {
+    "hemoglobin": "HGB", "hb": "HGB", "hgb": "HGB",
+    "rbc count": "RBC", "total rbc count": "RBC", "rbc": "RBC",
+    "packed cell volume": "PCV", "hematocrit": "PCV", "pcv": "PCV",
+    "mean corpuscular volume": "MCV", "mcv": "MCV",
+    "mean corpuscular hemoglobin": "MCH", "mch": "MCH",
+    "mean corpuscular hemoglobin concentration": "MCHC", "mchc": "MCHC",
+    "red cell distribution width": "RDW", "rdw": "RDW",
+    "total leucocyte count": "TLC", "total leukocyte count": "TLC", "tlc": "TLC",
+    "wbc": "WBC", "platelet count": "Platelets", "platelets": "Platelets",
+    "plt /mm3": "PLT /mm3", "plt/mm3": "PLT /mm3",
+    "bilirubin, total": "Total_Bilirubin", "bilirubin, direct": "Direct_Bilirubin",
+    "total protein": "Total_Protiens", "albumin": "Albumin",
+    "albumin/globulin ratio": "Albumin_and_Globulin_Ratio", "creatinine, serum": "Creatinine",
+    "blood urea nitrogen (bun), serum": "Blood_Urea_Nitrogen", "glucose": "Glucose",
+  };
+  const normalizeLabel = (label: string) => label.toLowerCase().replace(/\s+/g, " ").trim();
+  const seenCanonical = new Set<string>();
+  const parameterRows = Object.entries(extractedData).flatMap(([key, value]) => {
+    const canonical = rangeAliases[normalizeLabel(key)] || key;
+    if (seenCanonical.has(canonical)) return [];
+    seenCanonical.add(canonical);
+    const range = REFERENCE_RANGES[canonical];
+    const numericValue = parseFloat(String(value).replace(/[^\d.-]/g, ""));
+    const status = range && !Number.isNaN(numericValue)
+      ? numericValue < range.min ? "Low" : numericValue > range.max ? "High" : "Normal"
+      : "Reviewed";
+    const statusClass = status === "High" ? "high" : status === "Low" ? "low" : status === "Normal" ? "normal" : "reviewed";
+    const rangeText = range ? `${range.min} - ${range.max} ${range.unit}` : "Not available";
+    return [`<tr class="${statusClass}"><td><strong>${escapeHtml(canonical.replace(/_/g, " "))}</strong><small>${escapeHtml(key)}</small></td><td>${escapeHtml(String(value))}${range ? ` ${escapeHtml(range.unit)}` : ""}</td><td>${escapeHtml(rangeText)}</td><td><span class="status ${statusClass}">${status}</span></td></tr>`];
+  }).join("");
+  const resultSections = Object.entries(results).map(([disease, result]) => `
+    <section><h2>${escapeHtml(formatDiseaseName(disease))} (${escapeHtml(result.risk_percent || "N/A")})</h2>
+    <p>${escapeHtml(result.explanation || "Explanation not available.")}</p>
+    <h3>Recommended actions</h3>
+    <ul>${(result.precautions || ["No recommendations available."]).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></section>`
+  ).join("");
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>HealthMate AI Report</title><style>
+  @page{margin:18mm}body{font-family:Arial,sans-serif;max-width:900px;margin:0 auto;padding:28px;color:#172033;line-height:1.55;background:#fff}
+  .header{border:2px solid #e11d48;border-radius:12px;padding:22px 26px;margin-bottom:22px}.brand{color:#e11d48;font-size:12px;font-weight:bold;letter-spacing:2px;text-transform:uppercase}.header h1{margin:6px 0 0;font-size:28px}.meta{color:#64748b;font-size:12px;margin-top:6px}
+  h2{font-size:18px;border-bottom:2px solid #fecdd3;padding-bottom:8px;margin:26px 0 12px}h3{font-size:15px;color:#334155;margin-top:20px}.summary{border:1px solid #fecdd3;border-left:6px solid #e11d48;border-radius:8px;padding:16px;background:#fff7f8}
+  table{border-collapse:separate;border-spacing:0;width:100%;border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;font-size:12px}th{background:#f1f5f9;text-align:left;color:#334155;font-size:11px;text-transform:uppercase;letter-spacing:.5px}th,td{border-bottom:1px solid #dbe3ed;padding:11px 10px;vertical-align:middle}tr:last-child td{border-bottom:0}td:first-child{width:25%}td small{display:block;color:#64748b;font-size:10px;margin-top:2px}.high{background:#fff1f2}.low{background:#fff7ed}.normal{background:#f0fdf4}.reviewed{background:#f8fafc}.status{display:inline-block;border-radius:999px;padding:4px 9px;font-size:10px;font-weight:bold;text-transform:uppercase}.status.high{background:#ffe4e6;color:#be123c}.status.low{background:#ffedd5;color:#c2410c}.status.normal{background:#dcfce7;color:#15803d}.status.reviewed{background:#e2e8f0;color:#475569}
+  section{page-break-inside:avoid;border:1px solid #e2e8f0;border-radius:10px;padding:18px;margin-top:18px}section h2{margin-top:0;border-bottom:0;padding:0}.risk{color:#be123c;font-weight:bold}.actions{background:#f8fafc;border:1px solid #dbe3ed;border-radius:8px;padding:12px 16px}.footer{border-top:1px solid #cbd5e1;margin-top:30px;padding-top:12px;color:#64748b;font-size:11px}
+  </style></head><body><div class="header"><div class="brand">HealthMate AI</div><h1>Personal Health Assessment Report</h1><div class="meta">Generated ${escapeHtml(new Date().toLocaleString())}</div></div><h2>Overall Summary</h2><div class="summary">${escapeHtml(overallSummary || "Not available")}</div><h2>Analyzed Parameters</h2><table><thead><tr><th>Parameter</th><th>Your value</th><th>Reference range</th><th>Assessment</th></tr></thead><tbody>${parameterRows}</tbody></table>${resultSections}<div class="footer">AI-generated health guidance, not a diagnosis. Reference ranges may vary by laboratory, age, sex, and clinical context. Consult a qualified doctor for medical decisions.</div></body></html>`;
+  const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "healthmate-full-report.html";
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 // Flatten nested objects in extracted data — fixes [object Object] display
@@ -58,6 +122,17 @@ function flattenExtractedData(data: Record<string, any>): Record<string, string 
 }
 
 const REFERENCE_RANGES: Record<string, { min: number; max: number; unit: string }> = {
+  HGB: { min: 13, max: 17, unit: "g/dL" },
+  RBC: { min: 4.5, max: 5.5, unit: "million/uL" },
+  PCV: { min: 40, max: 54, unit: "%" },
+  MCV: { min: 80, max: 100, unit: "fL" },
+  MCH: { min: 27, max: 32, unit: "pg" },
+  MCHC: { min: 31, max: 36, unit: "g/dL" },
+  RDW: { min: 11.5, max: 14.5, unit: "%" },
+  TLC: { min: 4, max: 11, unit: "thousand/uL" },
+  WBC: { min: 4, max: 11, unit: "thousand/uL" },
+  Platelets: { min: 150, max: 450, unit: "thousand/uL" },
+  "PLT /mm3": { min: 150000, max: 450000, unit: "/mm3" },
   Total_Bilirubin: { min: 0.2, max: 1.2, unit: "mg/dL" },
   Direct_Bilirubin: { min: 0.0, max: 0.3, unit: "mg/dL" },
   Alkaline_Phosphotase: { min: 35, max: 104, unit: "U/L" },
@@ -232,6 +307,7 @@ export default function ReportResult() {
   const explanationsRef = useRef<Record<string, { explanation: string; precautions: string[] }>>({});
   const [overallSummary, setOverallSummary] = useState("");
   const [loadingSummary, setLoadingSummary] = useState(false);
+  const [language, setLanguage] = useState<ReportLanguage>("en-IN");
   const analysisTriggered = useRef(false);
 
   useEffect(() => {
@@ -270,6 +346,7 @@ export default function ReportResult() {
           risk_percent: prediction.risk_percent,
           matched_features: prediction.matched_features,
           extracted_data: editableData,
+          language,
         }),
       });
       const data = await res.json();
@@ -304,7 +381,8 @@ export default function ReportResult() {
             body: JSON.stringify({
               predictions: ran,
               explanations: explanationsRef.current,
-              extracted_data: editableData
+              extracted_data: editableData,
+              language,
             })
           });
           const sumData = await sumRes.json();
@@ -321,6 +399,74 @@ export default function ReportResult() {
 
     } catch {
       setResults(prev => ({ ...prev, [disease]: { ...prev[disease], loadingExplanation: false } }));
+    }
+  };
+
+  const regenerateLocalizedReport = async () => {
+    const currentResults = results;
+    if (!Object.keys(currentResults).length || loadingSummary) return;
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      setLoadingSummary(true);
+      setResults(prev => Object.fromEntries(
+        Object.entries(prev).map(([disease, result]) => [disease, { ...result, loadingExplanation: true }])
+      ));
+
+      const explanations: Record<string, { explanation: string; precautions: string[] }> = {};
+      const editableData = flattenExtractedData(resultData.extracted_data);
+
+      await Promise.all(Object.entries(currentResults).map(async ([disease, prediction]) => {
+        const response = await fetch(`${API_BASE_URL}/api1/explain`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({
+            disease,
+            risk_percent: prediction.risk_percent,
+            matched_features: prediction.matched_features,
+            extracted_data: editableData,
+            language,
+          }),
+        });
+        if (!response.ok) throw new Error("Failed to translate report explanations");
+        const data = await response.json();
+        explanations[disease] = {
+          explanation: data.explanation || "",
+          precautions: data.precautions || [],
+        };
+      }));
+
+      const summaryResponse = await fetch(`${API_BASE_URL}/api1/summarize-report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          predictions: currentResults,
+          explanations,
+          extracted_data: editableData,
+          language,
+        }),
+      });
+      if (!summaryResponse.ok) throw new Error("Failed to translate report summary");
+
+      const summaryData = await summaryResponse.json();
+      const summary = summaryData.summary || "";
+      explanationsRef.current = explanations;
+      setResults(prev => Object.fromEntries(
+        Object.entries(prev).map(([disease, result]) => [
+          disease,
+          { ...result, ...explanations[disease], loadingExplanation: false },
+        ])
+      ));
+      setOverallSummary(summary);
+      if (savedReportId.current) {
+        await updateReportExplanationsAndSummary(savedReportId.current, explanations, summary);
+      }
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : "Could not translate the report.");
+    } finally {
+      setLoadingSummary(false);
     }
   };
 
@@ -385,12 +531,54 @@ export default function ReportResult() {
         ) : (
           <AnimatePresence mode="wait">
             <motion.div key="results" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="w-full">
-              <div className="text-center mb-12 max-w-2xl mx-auto mt-4 md:mt-10">
+              <div className="text-center mb-8 max-w-2xl mx-auto mt-4 md:mt-10">
                 <h1 className="text-4xl sm:text-[2.75rem] font-black tracking-tight mb-4 text-slate-900">Your Intelligence Report</h1>
                 <p className="text-slate-500 font-semibold text-lg max-w-2xl mx-auto">
                   We've analyzed your data points. Here is a breakdown of your current health markers and what they suggest.
                 </p>
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+                  <label htmlFor="report-language" className="text-sm font-bold text-slate-600">Report language</label>
+                  <select
+                    id="report-language"
+                    value={language}
+                    onChange={(event) => setLanguage(event.target.value as ReportLanguage)}
+                    className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-rose-400"
+                  >
+                    <option value="en-IN">English</option>
+                    <option value="hi-IN">Hindi</option>
+                    <option value="hi-en">Hinglish</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={regenerateLocalizedReport}
+                    disabled={!Object.keys(results).length || loadingSummary}
+                    className="rounded-xl bg-rose-500 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {loadingSummary ? "Translating..." : "Apply language"}
+                  </button>
+                </div>
               </div>
+
+              <div className="mb-8 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => downloadFullReport(overallSummary, results, resultData.extracted_data)}
+                  disabled={!Object.keys(results).length}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:border-rose-300 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Download size={17} /> Download Full Report
+                </button>
+              </div>
+
+              {/* AI VOICE PLAYER — reads the complete report */}
+              {(overallSummary || loadingSummary) && (
+                <AIVoiceSummaryPlayer
+                  text={overallSummary}
+                  ready={!loadingSummary && !!overallSummary}
+                  apiBase={API_BASE_URL}
+                  language={language}
+                />
+              )}
 
               {errorMsg && (
                 <div className="mb-8 p-6 bg-rose-50 border border-status-critical/20 rounded-2xl flex flex-col items-center text-center">
@@ -414,7 +602,7 @@ export default function ReportResult() {
                 </GlassCard>
               ) : (
                 <div className="space-y-8 w-full">
-                  {/* OVERALL AI REPORT SUMMARY CARD */}
+                  {/* OVERALL AI REPORT SUMMARY CARD (text version, kept alongside the audio player) */}
                   {(overallSummary || loadingSummary) && (
                     <GlassCard className="!p-8 border-t-8 border-t-rose-500 shadow-rose-500/5 overflow-hidden">
                       <div className="flex items-center gap-3 mb-4">
