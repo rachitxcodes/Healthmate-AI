@@ -73,11 +73,9 @@ async def extract_medical_values_via_llm(image_bytes: Any, mime_type: str) -> di
     import asyncio
 
     MODELS = [
-        "google/gemma-4-31b-it:free",
-        "google/gemma-4-26b-a4b-it:free",
-        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning-20260428:free",
-        "openrouter/free",
         "google/gemini-2.5-flash",
+        "google/gemini-2.5-flash-lite",
+        "openrouter/free",
         "meta-llama/llama-3.2-11b-vision-instruct",
     ]
 
